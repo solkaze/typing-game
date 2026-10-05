@@ -1,121 +1,160 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useCallback, useEffect, useState } from 'react'
+import AnalysisView from './AnalysisView'
+import Game from './Game'
+import Result from './Result'
+import { deleteSession, loadSessions, saveSession } from './storage'
+import { pickSentences } from './texts/pick'
+import type { Sentence } from './texts/sentences'
+import { accuracy, kps, type Session } from './types'
+
+type View =
+  | { name: 'home' }
+  | { name: 'play'; sentences: Sentence[]; run: number }
+  | { name: 'result'; session: Session; saveError: string | null }
+  | { name: 'analysis' }
+
+const KANA_COUNTS = [100, 200, 400]
+const COUNT_KEY = 'typing-game.kanaCount'
+
+const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [view, setView] = useState<View>({ name: 'home' })
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [kanaCount, setKanaCount] = useState(() => {
+    const saved = Number(localStorage.getItem(COUNT_KEY))
+    return KANA_COUNTS.includes(saved) ? saved : 200
+  })
+
+  useEffect(() => {
+    loadSessions().then(setSessions, (e) => setLoadError(String(e)))
+  }, [])
+
+  const start = useCallback(() => {
+    setView({ name: 'play', sentences: pickSentences(kanaCount), run: Date.now() })
+  }, [kanaCount])
+
+  const home = useCallback(() => setView({ name: 'home' }), [])
+
+  const finish = useCallback(async (session: Session) => {
+    let saveError: string | null = null
+    try {
+      session = { ...session, id: await saveSession(session) }
+      setSessions((prev) => [...prev, session])
+    } catch (e) {
+      saveError = String(e)
+    }
+    setView({ name: 'result', session, saveError })
+  }, [])
+
+  const remove = async (id: number) => {
+    await deleteSession(id)
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+  }
+
+  useEffect(() => {
+    if (view.name !== 'home') return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') start()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [view.name, start])
+
+  if (view.name === 'play') {
+    return <Game key={view.run} sentences={view.sentences} onFinish={finish} onAbort={home} />
+  }
+  if (view.name === 'result') {
+    return (
+      <Result
+        session={view.session}
+        sessions={sessions}
+        saveError={view.saveError}
+        onRetry={start}
+        onHome={home}
+        onAnalysis={() => setView({ name: 'analysis' })}
+      />
+    )
+  }
+  if (view.name === 'analysis') {
+    return <AnalysisView sessions={sessions} onBack={home} />
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <main className="page">
+      <header className="page-head">
+        <h1>タイピング練習</h1>
+      </header>
+
+      <section className="start">
+        <div className="segmented">
+          {KANA_COUNTS.map((n) => (
+            <button
+              key={n}
+              className={n === kanaCount ? 'on' : ''}
+              onClick={() => {
+                setKanaCount(n)
+                localStorage.setItem(COUNT_KEY, String(n))
+              }}
+            >
+              {n} かな
+            </button>
+          ))}
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+        <button className="primary" onClick={start}>
+          スタート (Enter)
         </button>
+        <button onClick={() => setView({ name: 'analysis' })}>分析を見る</button>
       </section>
 
-      <div className="ticks"></div>
+      {loadError && <p className="error">記録を読み込めませんでした: {loadError}</p>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
+      <section className="panel">
+        <h3>最近の記録</h3>
+        {sessions.length === 0 ? (
+          <p className="note">まだ記録がありません</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>日時</th>
+                <th>かな</th>
+                <th>タイム</th>
+                <th>速度</th>
+                <th>正答率</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions
+                .slice(-20)
+                .reverse()
+                .map((s) => (
+                  <tr key={s.id}>
+                    <td>{date(s.startedAt)}</td>
+                    <td>{s.kanaCount}</td>
+                    <td>{(s.durationMs / 1000).toFixed(2)} 秒</td>
+                    <td>{kps(s).toFixed(2)} 打/秒</td>
+                    <td>{(accuracy(s) * 100).toFixed(1)}%</td>
+                    <td>
+                      <button
+                        className="quiet"
+                        onClick={() => setView({ name: 'result', session: s, saveError: null })}
+                      >
+                        詳細
+                      </button>
+                      <button className="quiet" onClick={() => remove(s.id!)}>
+                        削除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
       </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 

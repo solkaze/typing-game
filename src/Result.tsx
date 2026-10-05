@@ -1,0 +1,112 @@
+import { useEffect, useMemo } from 'react'
+import { analyze, worst } from './analysis'
+import SessionReview from './SessionReview'
+import StatTable from './StatTable'
+import { accuracy, kps, type Session } from './types'
+
+type Props = {
+  session: Session
+  // 保存済みの全記録。この回より前の回との比較に使う
+  sessions: Session[]
+  saveError: string | null
+  onRetry: () => void
+  onHome: () => void
+  onAnalysis: () => void
+}
+
+const RECENT = 10
+
+const signed = (v: number, digits: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(digits)}`
+const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length
+
+const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })
+
+export default function Result({ session, sessions, saveError, onRetry, onHome, onAnalysis }: Props) {
+  const a = useMemo(() => analyze([session]), [session])
+  // 同じかな数の、この回より前の直近の記録
+  const recent = useMemo(
+    () =>
+      sessions
+        .filter((s) => s.kanaCount === session.kanaCount && s.startedAt < session.startedAt)
+        .slice(-RECENT),
+    [sessions, session],
+  )
+  const kpsDiff = recent.length ? kps(session) - mean(recent.map(kps)) : null
+  const accDiff = recent.length ? (accuracy(session) - mean(recent.map(accuracy))) * 100 : null
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') onRetry()
+      if (e.key === 'Escape') onHome()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onRetry, onHome])
+
+  return (
+    <main className="page">
+      <header className="page-head">
+        <h2>結果</h2>
+        <span className="note">{date(session.startedAt)}</span>
+      </header>
+
+      <section className="tiles">
+        <div className="tile">
+          <span className="tile-label">タイム</span>
+          <span className="tile-value">{(session.durationMs / 1000).toFixed(2)} 秒</span>
+        </div>
+        <div className="tile">
+          <span className="tile-label">速度</span>
+          <span className="tile-value">{kps(session).toFixed(2)} 打/秒</span>
+          {kpsDiff !== null && (
+            <span className="tile-note">
+              直近 {recent.length} 回の平均比 {signed(kpsDiff, 2)}
+            </span>
+          )}
+        </div>
+        <div className="tile">
+          <span className="tile-label">正答率</span>
+          <span className="tile-value">{(accuracy(session) * 100).toFixed(1)}%</span>
+          {accDiff !== null && (
+            <span className="tile-note">
+              直近 {recent.length} 回の平均比 {signed(accDiff, 1)}
+            </span>
+          )}
+        </div>
+        <div className="tile">
+          <span className="tile-label">打鍵 / ミス</span>
+          <span className="tile-value">
+            {session.correct} / {session.misses}
+          </span>
+        </div>
+        <div className="tile">
+          <span className="tile-label">かな</span>
+          <span className="tile-value">{session.kanaCount} 字</span>
+        </div>
+      </section>
+
+      {saveError && <p className="error">記録を保存できませんでした: {saveError}</p>}
+
+      <SessionReview session={session} />
+
+      <div className="grid-2">
+        <StatTable title="今回遅かった 2 連" note="2 回以上出たもの" rows={worst(a.bigrams, 2, 8)} />
+        <StatTable
+          title="今回ミスした 2 連"
+          rows={a.bigrams
+            .filter((r) => r.missRate > 0)
+            .sort((x, y) => y.missRate * y.count - x.missRate * x.count)
+            .slice(0, 8)}
+        />
+      </div>
+
+      <footer className="actions">
+        <button className="primary" onClick={onRetry}>
+          もう一度 (Enter)
+        </button>
+        <button onClick={onAnalysis}>分析を見る</button>
+        <button onClick={onHome}>ホーム (Esc)</button>
+      </footer>
+    </main>
+  )
+}
