@@ -120,9 +120,9 @@ button.quiet {
 }
 
 .page {
-  max-width: 960px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 3rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -136,6 +136,11 @@ button.quiet {
 
 .page-head > :first-child {
   margin-right: auto;
+}
+
+/* 広げても間延びするだけの画面 (設定など) */
+.page.narrow {
+  max-width: 960px;
 }
 
 .start,
@@ -376,6 +381,37 @@ td.spot-text {
   gap: 1rem;
 }
 
+/* 表は行数がまちまちなので、隣に合わせて引き伸ばさない */
+.grid-2 {
+  align-items: start;
+}
+
+/* 結果画面の本体。広い画面では打鍵のふり返りを右の列に出して縦の長さを抑える */
+.result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1280px) {
+  .result-body {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    /* 右の列が長いとき、余りを左の列の最後の行に寄せる */
+    grid-template-rows: repeat(3, auto) 1fr;
+    align-items: start;
+  }
+
+  .result-body > * {
+    grid-column: 1;
+  }
+
+  .result-body > .review-replay {
+    grid-column: 2;
+    grid-row: 1 / -1;
+  }
+}
+
 /* グラフ。色は dataviz の基準パレット (系列1) と面の色 */
 .viz-root {
   --surface-1: #fcfcfb;
@@ -420,6 +456,8 @@ td.spot-text {
   display: block;
   width: 100%;
   height: auto;
+  /* 幅を測り直すまでの間に、描いた内容がはみ出さないようにする */
+  overflow: hidden;
   touch-action: none;
 }
 
@@ -453,8 +491,31 @@ td.spot-text {
   stroke-width: 2;
 }
 
+.chart.selectable svg {
+  cursor: pointer;
+}
+
+/* ホームの履歴グラフ */
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.history-head .note {
+  margin: 0 auto 0 0;
+}
+
 /* プレイ画面 */
 .game {
+  /* 1行が長いと視線の移動が増えるので、広い画面でも広げない */
   max-width: 960px;
   min-height: 100vh;
   margin: 0 auto;
@@ -490,7 +551,8 @@ td.spot-text {
 /* カウントダウンと前の文の速度を出す場所。出し入れで文が上下しないよう高さを固定する */
 .game-banner {
   height: 4.5rem;
-  margin: 5vh 0 0;
+  /* 高い画面では文を中央寄りに下げる。文の行数で位置が動かないよう上からの距離で決める */
+  margin: max(5vh, 30vh - 8rem) 0 0;
   display: flex;
   align-items: center;
   justify-content: center;

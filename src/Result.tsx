@@ -11,6 +11,8 @@ type Props = {
   saveError: string | null
   onRetry: () => void
   onHome: () => void
+  // 保存されている記録だけ削除できる
+  onDelete?: () => void
   onAnalysis: () => void
 }
 
@@ -21,7 +23,7 @@ const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length
 
 const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })
 
-export default function Result({ session, sessions, saveError, onRetry, onHome, onAnalysis }: Props) {
+export default function Result({ session, sessions, saveError, onRetry, onHome, onDelete, onAnalysis }: Props) {
   const a = useMemo(() => analyze([session]), [session])
   // 同じかな数の、この回より前の直近の記録
   const recent = useMemo(
@@ -57,6 +59,11 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
       </button>
       <button onClick={onAnalysis}>分析を見る</button>
       <button onClick={onHome}>ホーム (Esc)</button>
+      {onDelete && (
+        <button className="quiet" onClick={onDelete}>
+          この記録を削除
+        </button>
+      )}
     </>
   )
 
@@ -106,17 +113,19 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
 
       {saveError && <p className="error">記録を保存できませんでした: {saveError}</p>}
 
-      <SessionReview session={session} />
+      <div className="result-body">
+        <SessionReview session={session} />
 
-      <div className="grid-2">
-        <StatTable title="今回遅かった 2 連" note="2 回以上出たもの" rows={worst(a.bigrams, 2, 8)} />
-        <StatTable
-          title="今回ミスした 2 連"
-          rows={a.bigrams
-            .filter((r) => r.missRate > 0)
-            .sort((x, y) => y.missRate * y.count - x.missRate * x.count)
-            .slice(0, 8)}
-        />
+        <div className="grid-2">
+          <StatTable title="今回遅かった 2 連" note="2 回以上出たもの" rows={worst(a.bigrams, 2, 8)} />
+          <StatTable
+            title="今回ミスした 2 連"
+            rows={a.bigrams
+              .filter((r) => r.missRate > 0)
+              .sort((x, y) => y.missRate * y.count - x.missRate * x.count)
+              .slice(0, 8)}
+          />
+        </div>
       </div>
 
       <footer className="actions">{actions}</footer>

@@ -79,7 +79,7 @@ export default function SessionReview({ session }: Props) {
         )}
       </section>
 
-      <section className="panel">
+      <section className="panel review-replay">
         <h3>打鍵のふり返り</h3>
         <p className="replay-legend note">
           <span className="replay-keys">

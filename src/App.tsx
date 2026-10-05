@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import AnalysisView from './AnalysisView'
 import Game from './Game'
+import HistoryCharts from './HistoryCharts'
+import type { Range } from './range'
 import Result from './Result'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import SettingsView from './SettingsView'
 import { deleteSession, loadSessions, saveSession } from './storage'
 import { pickSentences } from './texts/pick'
 import type { Sentence } from './texts/sentences'
-import { accuracy, kps, type Session } from './types'
+import type { Session } from './types'
 
 type View =
   | { name: 'home' }
@@ -19,8 +21,6 @@ type View =
 const KANA_COUNTS = [100, 200, 400]
 const COUNT_KEY = 'typing-game.kanaCount'
 
-const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })
-
 function App() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [sessions, setSessions] = useState<Session[]>([])
@@ -31,6 +31,8 @@ function App() {
   })
 
   const [settings, setSettings] = useState(loadSettings)
+  // ホームの履歴グラフの表示範囲。null は全体
+  const [range, setRange] = useState<Range | null>(null)
 
   useEffect(() => {
     loadSessions().then(setSessions, (e) => setLoadError(String(e)))
@@ -47,6 +49,8 @@ function App() {
     try {
       session = { ...session, id: await saveSession(session) }
       setSessions((prev) => [...prev, session])
+      // 直近を見ていたなら、増えた1回ぶん右へずらして最新を含めたままにする
+      setRange((r) => r && { from: r.from + 1, to: r.to + 1 })
     } catch (e) {
       saveError = String(e)
     }
@@ -61,6 +65,7 @@ function App() {
   const remove = async (id: number) => {
     await deleteSession(id)
     setSessions((prev) => prev.filter((s) => s.id !== id))
+    home()
   }
 
   useEffect(() => {
@@ -99,6 +104,7 @@ function App() {
         saveError={view.saveError}
         onRetry={start}
         onHome={home}
+        onDelete={view.session.id === undefined ? undefined : () => remove(view.session.id!)}
         onAnalysis={() => setView({ name: 'analysis' })}
       />
     )
@@ -140,50 +146,16 @@ function App() {
 
       {loadError && <p className="error">記録を読み込めませんでした: {loadError}</p>}
 
-      <section className="panel">
-        <h3>最近の記録</h3>
-        {sessions.length === 0 ? (
-          <p className="note">まだ記録がありません</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>日時</th>
-                <th>かな</th>
-                <th>タイム</th>
-                <th>速度</th>
-                <th>正答率</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions
-                .slice(-20)
-                .reverse()
-                .map((s) => (
-                  <tr key={s.id}>
-                    <td>{date(s.startedAt)}</td>
-                    <td>{s.kanaCount}</td>
-                    <td>{(s.durationMs / 1000).toFixed(2)} 秒</td>
-                    <td>{kps(s).toFixed(2)} 打/秒</td>
-                    <td>{(accuracy(s) * 100).toFixed(1)}%</td>
-                    <td>
-                      <button
-                        className="quiet"
-                        onClick={() => setView({ name: 'result', session: s, saveError: null })}
-                      >
-                        詳細
-                      </button>
-                      <button className="quiet" onClick={() => remove(s.id!)}>
-                        削除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {sessions.length === 0 ? (
+        <p className="note">まだ記録がありません</p>
+      ) : (
+        <HistoryCharts
+          sessions={sessions}
+          range={range}
+          onRange={setRange}
+          onSelect={(s) => setView({ name: 'result', session: s, saveError: null })}
+        />
+      )}
     </main>
   )
 }

@@ -99,35 +99,35 @@ export default function AnalysisView({ sessions, onBack }: Props) {
         />
       </section>
 
-      <section className="panel">
-        <h3>流れ</h3>
-        <table>
-          <tbody>
-            <tr>
-              <th>通常の打鍵間隔</th>
-              <td>{ms(a.medianInterval)}</td>
-            </tr>
-            <tr>
-              <th>ミス直後 3 打の打鍵間隔</th>
-              <td>{ms(a.flow.afterMiss)}</td>
-            </tr>
-            <tr>
-              <th>文の切り替わりでの間</th>
-              <td>{ms(a.flow.sentenceStart)}</td>
-            </tr>
-            <tr>
-              <th>前半の速度</th>
-              <td>{rate(a.flow.firstHalfKps)}</td>
-            </tr>
-            <tr>
-              <th>後半の速度</th>
-              <td>{rate(a.flow.secondHalfKps)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
       <div className="grid-2">
+        <section className="panel">
+          <h3>流れ</h3>
+          <table>
+            <tbody>
+              <tr>
+                <th>通常の打鍵間隔</th>
+                <td>{ms(a.medianInterval)}</td>
+              </tr>
+              <tr>
+                <th>ミス直後 3 打の打鍵間隔</th>
+                <td>{ms(a.flow.afterMiss)}</td>
+              </tr>
+              <tr>
+                <th>文の切り替わりでの間</th>
+                <td>{ms(a.flow.sentenceStart)}</td>
+              </tr>
+              <tr>
+                <th>前半の速度</th>
+                <td>{rate(a.flow.firstHalfKps)}</td>
+              </tr>
+              <tr>
+                <th>後半の速度</th>
+                <td>{rate(a.flow.secondHalfKps)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
         <StatTable
           title="遅い 2 連"
           note={`${minCount} 回以上出たものを、損失時間の大きい順に表示`}
@@ -140,33 +140,33 @@ export default function AnalysisView({ sessions, onBack }: Props) {
         />
         <StatTable title="ミスしやすい 2 連" rows={byMissRate(a.bigrams, minCount, 15)} />
         <StatTable title="キー別" note="損失時間の大きい順" rows={worst(a.keys, minCount, 40)} />
-      </div>
 
-      <section className="panel">
-        <h3>打ち間違い</h3>
-        {a.confusions.length === 0 ? (
-          <p className="note">ミスの記録がありません</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>打つべきキー</th>
-                <th>打ったキー</th>
-                <th>回数</th>
-              </tr>
-            </thead>
-            <tbody>
-              {a.confusions.slice(0, 20).map((c) => (
-                <tr key={c.expected + c.typed}>
-                  <td className="keys">{c.expected}</td>
-                  <td className="keys">{c.typed === ' ' ? 'Space' : c.typed}</td>
-                  <td>{c.count}</td>
+        <section className="panel">
+          <h3>打ち間違い</h3>
+          {a.confusions.length === 0 ? (
+            <p className="note">ミスの記録がありません</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>打つべきキー</th>
+                  <th>打ったキー</th>
+                  <th>回数</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {a.confusions.slice(0, 20).map((c) => (
+                  <tr key={c.expected + c.typed}>
+                    <td className="keys">{c.expected}</td>
+                    <td className="keys">{c.typed === ' ' ? 'Space' : c.typed}</td>
+                    <td>{c.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
     </main>
   )
 }

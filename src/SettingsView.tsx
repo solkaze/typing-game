@@ -17,7 +17,7 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
   }, [onBack])
 
   return (
-    <main className="page">
+    <main className="page narrow">
       <header className="page-head">
         <h2>設定</h2>
         <button onClick={onBack}>ホーム (Esc)</button>
