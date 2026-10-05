@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import AnalysisView from './AnalysisView'
 import Game from './Game'
 import Result from './Result'
+import { loadSettings, saveSettings, type Settings } from './settings'
+import SettingsView from './SettingsView'
 import { deleteSession, loadSessions, saveSession } from './storage'
 import { pickSentences } from './texts/pick'
 import type { Sentence } from './texts/sentences'
@@ -12,6 +14,7 @@ type View =
   | { name: 'play'; sentences: Sentence[]; run: number }
   | { name: 'result'; session: Session; saveError: string | null }
   | { name: 'analysis' }
+  | { name: 'settings' }
 
 const KANA_COUNTS = [100, 200, 400]
 const COUNT_KEY = 'typing-game.kanaCount'
@@ -26,6 +29,8 @@ function App() {
     const saved = Number(localStorage.getItem(COUNT_KEY))
     return KANA_COUNTS.includes(saved) ? saved : 200
   })
+
+  const [settings, setSettings] = useState(loadSettings)
 
   useEffect(() => {
     loadSessions().then(setSessions, (e) => setLoadError(String(e)))
@@ -48,6 +53,11 @@ function App() {
     setView({ name: 'result', session, saveError })
   }, [])
 
+  const changeSettings = (next: Settings) => {
+    setSettings(next)
+    saveSettings(next)
+  }
+
   const remove = async (id: number) => {
     await deleteSession(id)
     setSessions((prev) => prev.filter((s) => s.id !== id))
@@ -56,14 +66,30 @@ function App() {
   useEffect(() => {
     if (view.name !== 'home') return
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return
       if (e.key === 'Enter') start()
+      // ホームポジションのまま始められるように Space でも開始する。
+      // フォーカス中のボタンが Space で押されないよう既定動作は止める
+      if (e.key === ' ') {
+        e.preventDefault()
+        start()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [view.name, start])
 
   if (view.name === 'play') {
-    return <Game key={view.run} sentences={view.sentences} onFinish={finish} onAbort={home} />
+    return (
+      <Game
+        key={view.run}
+        sentences={view.sentences}
+        countdownSec={settings.countdownSec}
+        showSentenceKps={settings.sentenceKps}
+        onFinish={finish}
+        onAbort={home}
+      />
+    )
   }
   if (view.name === 'result') {
     return (
@@ -80,11 +106,15 @@ function App() {
   if (view.name === 'analysis') {
     return <AnalysisView sessions={sessions} onBack={home} />
   }
+  if (view.name === 'settings') {
+    return <SettingsView settings={settings} onChange={changeSettings} onBack={home} />
+  }
 
   return (
     <main className="page">
       <header className="page-head">
         <h1>タイピング練習</h1>
+        <button onClick={() => setView({ name: 'settings' })}>設定</button>
       </header>
 
       <section className="start">
@@ -103,7 +133,7 @@ function App() {
           ))}
         </div>
         <button className="primary" onClick={start}>
-          スタート (Enter)
+          スタート (Space / Enter)
         </button>
         <button onClick={() => setView({ name: 'analysis' })}>分析を見る</button>
       </section>

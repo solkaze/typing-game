@@ -30,7 +30,7 @@ Tests are Vitest for the frontend logic (engine, sentence picking, analysis) and
 
 Two halves that meet at an IPC boundary:
 
-- **Frontend** (`src/`, `index.html`, `vite.config.ts`) — plain React SPA, no router or state library. `App.tsx` switches between home / `Game` / `Result` / `AnalysisView` with a local `view` state. Runs equally in a browser (`npm run dev`) or in the Tauri webview: `storage.ts` is the only Tauri-aware module and falls back to `localStorage` outside Tauri.
+- **Frontend** (`src/`, `index.html`, `vite.config.ts`) — plain React SPA, no router or state library. `App.tsx` switches between home / `Game` / `Result` / `AnalysisView` / `SettingsView` with a local `view` state. Runs equally in a browser (`npm run dev`) or in the Tauri webview: `storage.ts` is the only Tauri-aware module and falls back to `localStorage` outside Tauri.
 - **Rust host** (`src-tauri/`) — `src/main.rs` is a thin shim calling `app_lib::run()` in `src/lib.rs`, which holds the `tauri::Builder` and the three commands (`save_session`, `load_sessions`, `delete_session`). `src/db.rs` is the SQLite layer (rusqlite, bundled); the DB is `sessions.db` in the app data dir.
 
 Frontend modules worth knowing before editing:
@@ -41,6 +41,7 @@ Frontend modules worth knowing before editing:
 - `types.ts` — `Session` / `Keystroke`. A session is stored as one JSON blob including the full keystroke log, so new analyses need no schema change.
 - `analysis.ts` — pure functions from sessions to per-key / bigram / trigram / confusion / flow stats. Intervals are only taken from keystrokes typed right first time, and n-grams never span sentences. "loss" = (median − overall median) × count is the ranking used for "what to practise".
 - `review.ts` — pure function from **one** session to a per-sentence keystroke replay (each key marked ok / slow / stall / miss against that session's own median interval), a breakdown of time lost, and the slowest spots. Rendered by `SessionReview.tsx` inside `Result`, which is also opened from the home history list (詳細).
+- `settings.ts` — user settings (countdown seconds, per-sentence KPS display) as one JSON blob in `localStorage`; `loadSettings` fills missing fields with defaults, so adding a setting means a field + default there and a row in `SettingsView.tsx`. `App` owns the state and passes values to `Game` as props.
 - Charts follow the dataviz skill (single series, palette vars under `.viz-root` in `index.css`).
 
 Wiring facts that span files:

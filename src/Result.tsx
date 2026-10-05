@@ -36,12 +36,29 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return
       if (e.key === 'Enter') onRetry()
+      // Space は既定だとスクロールやフォーカス中ボタンの押下になるので止める
+      if (e.key === ' ') {
+        e.preventDefault()
+        onRetry()
+      }
       if (e.key === 'Escape') onHome()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onRetry, onHome])
+
+  // 下までスクロールしなくても押せるよう、上下の両方に置く
+  const actions = (
+    <>
+      <button className="primary" onClick={onRetry}>
+        もう一度 (Space / Enter)
+      </button>
+      <button onClick={onAnalysis}>分析を見る</button>
+      <button onClick={onHome}>ホーム (Esc)</button>
+    </>
+  )
 
   return (
     <main className="page">
@@ -49,6 +66,8 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
         <h2>結果</h2>
         <span className="note">{date(session.startedAt)}</span>
       </header>
+
+      <div className="actions">{actions}</div>
 
       <section className="tiles">
         <div className="tile">
@@ -100,13 +119,7 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
         />
       </div>
 
-      <footer className="actions">
-        <button className="primary" onClick={onRetry}>
-          もう一度 (Enter)
-        </button>
-        <button onClick={onAnalysis}>分析を見る</button>
-        <button onClick={onHome}>ホーム (Esc)</button>
-      </footer>
+      <footer className="actions">{actions}</footer>
     </main>
   )
 }

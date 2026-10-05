@@ -231,6 +231,44 @@ td.keys {
   font-variant-numeric: tabular-nums;
 }
 
+/* 設定 */
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting:first-child {
+  padding-top: 0;
+}
+
+.setting:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.setting-label {
+  color: var(--text-h);
+}
+
+.setting input[type='checkbox'] {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.setting .segmented {
+  flex: none;
+}
+
+.setting .segmented button {
+  background: var(--bg);
+}
+
 /* 1回分のふり返り */
 .replay {
   margin-top: 0.9rem;
@@ -449,9 +487,38 @@ td.spot-text {
   background: var(--accent);
 }
 
+/* カウントダウンと前の文の速度を出す場所。出し入れで文が上下しないよう高さを固定する */
+.game-banner {
+  height: 4.5rem;
+  margin: 5vh 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown {
+  font-size: 3.5rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent);
+  animation: countdown 0.3s ease-out;
+}
+
+@keyframes countdown {
+  from {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
 .sentence {
-  margin-top: 12vh;
   text-align: center;
+}
+
+.sentence.waiting {
+  opacity: 0.45;
 }
 
 .sentence p {
