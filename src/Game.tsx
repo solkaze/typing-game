@@ -1,9 +1,12 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { Typist } from './romaji/engine'
 import type { Sentence } from './texts/sentences'
-import type { Keystroke, Session } from './types'
+import type { Keystroke, Mode, Session } from './types'
 
 type Props = {
+  mode: Mode
+  // 長文モードの文章の題
+  title?: string
   sentences: Sentence[]
   // 開始前のカウントダウン秒数。0 ならすぐ打てる
   countdownSec: number
@@ -45,7 +48,15 @@ function newRun(sentences: Sentence[]): Run {
   }
 }
 
-export default function Game({ sentences, countdownSec, showSentenceKps, onFinish, onAbort }: Props) {
+export default function Game({
+  mode,
+  title,
+  sentences,
+  countdownSec,
+  showSentenceKps,
+  onFinish,
+  onAbort,
+}: Props) {
   const run = useRef<Run>(null)
   if (run.current === null) run.current = newRun(sentences)
   const [, redraw] = useReducer((n: number) => n + 1, 0)
@@ -106,6 +117,8 @@ export default function Game({ sentences, countdownSec, showSentenceKps, onFinis
       }
       if (r.index === r.typists.length) {
         onFinish({
+          mode,
+          title,
           startedAt: r.startedAt,
           kanaCount: r.kanaDone,
           durationMs: t,
@@ -120,7 +133,7 @@ export default function Game({ sentences, countdownSec, showSentenceKps, onFinis
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [sentences, count, onFinish, onAbort])
+  }, [mode, title, sentences, count, onFinish, onAbort])
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -136,9 +149,22 @@ export default function Game({ sentences, countdownSec, showSentenceKps, onFinis
   const kanaTotal = r.typists.reduce((n, t) => n + t.kana.length, 0)
   const kanaNow = r.kanaDone + (typist.done ? 0 : typist.kanaPos)
   const next = sentences[index + 1]
+  const long = mode === 'long'
+
+  // 長文では、いま打っている文が枠の中ほどに来るよう送る。行が上下で切れないよう行の高さ単位で止める
+  const passage = useRef<HTMLElement>(null)
+  const current = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const box = passage.current
+    const now = current.current
+    if (!box || !now) return
+    const line = parseFloat(getComputedStyle(box).lineHeight)
+    const top = now.offsetTop - (box.clientHeight - now.offsetHeight) / 2
+    box.scrollTop = Math.round(top / line) * line
+  }, [index])
 
   return (
-    <main className="game">
+    <main className={long ? 'game long' : 'game'}>
       <header className="game-status">
         <span>
           {kanaNow} / {kanaTotal} かな
@@ -161,8 +187,22 @@ export default function Game({ sentences, countdownSec, showSentenceKps, onFinis
         )}
       </p>
 
+      {long && (
+        <section ref={passage} className={count > 0 ? 'passage waiting' : 'passage'}>
+          {sentences.map((s, i) => (
+            <span
+              key={i}
+              ref={i === index ? current : undefined}
+              className={i < index ? 'done' : i === index ? 'now' : undefined}
+            >
+              {s.text}
+            </span>
+          ))}
+        </section>
+      )}
+
       <section className={count > 0 ? 'sentence waiting' : 'sentence'}>
-        <p className="sentence-text">{sentences[index].text}</p>
+        {!long && <p className="sentence-text">{sentences[index].text}</p>}
         <p className="sentence-kana">
           <span className="done">{typist.kana.slice(0, typist.kanaPos)}</span>
           {typist.kana.slice(typist.kanaPos)}
@@ -173,7 +213,7 @@ export default function Game({ sentences, countdownSec, showSentenceKps, onFinis
         </p>
       </section>
 
-      <p className="sentence-next">{next ? next.text : ' '}</p>
+      {!long && <p className="sentence-next">{next ? next.text : ' '}</p>}
 
       <footer className="hint">
         {imeOn ? (

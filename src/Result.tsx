@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { analyze, worst } from './analysis'
 import SessionReview from './SessionReview'
 import StatTable from './StatTable'
-import { accuracy, kps, type Session } from './types'
+import { accuracy, kps, modeLabel, modeOf, type Session } from './types'
 
 type Props = {
   session: Session
@@ -25,13 +25,19 @@ const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle:
 
 export default function Result({ session, sessions, saveError, onRetry, onHome, onDelete, onAnalysis }: Props) {
   const a = useMemo(() => analyze([session]), [session])
-  // 同じかな数の、この回より前の直近の記録
+  const mode = modeOf(session)
+  // 同じモードの、この回より前の直近の記録。長文は文章ごとに長さが違うので、かな数は揃えない
   const recent = useMemo(
     () =>
       sessions
-        .filter((s) => s.kanaCount === session.kanaCount && s.startedAt < session.startedAt)
+        .filter(
+          (s) =>
+            modeOf(s) === mode &&
+            (mode === 'long' || s.kanaCount === session.kanaCount) &&
+            s.startedAt < session.startedAt,
+        )
         .slice(-RECENT),
-    [sessions, session],
+    [sessions, session, mode],
   )
   const kpsDiff = recent.length ? kps(session) - mean(recent.map(kps)) : null
   const accDiff = recent.length ? (accuracy(session) - mean(recent.map(accuracy))) * 100 : null
@@ -71,7 +77,10 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
     <main className="page">
       <header className="page-head">
         <h2>結果</h2>
-        <span className="note">{date(session.startedAt)}</span>
+        <span className="note">
+          {modeLabel(mode)}
+          {session.title && `「${session.title}」`}　{date(session.startedAt)}
+        </span>
       </header>
 
       <div className="actions">{actions}</div>

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { normalizeKana } from './romaji/engine'
 import { SLOW_RATIO, STALL_RATIO, review, type ReviewKey, type ReviewSentence } from './review'
-import { SENTENCES } from './texts/sentences'
+import { readingOf } from './texts/lookup'
 import { kps, type Session } from './types'
 
 type Props = { session: Session }
@@ -14,8 +14,8 @@ type Cell = { kana: string; keys: ReviewKey[] }
 
 // 同じかなを打っている打鍵をまとめる。読みは文面から引くので、文が差し替わった古い記録ではローマ字だけになる
 function cells(s: ReviewSentence): Cell[] {
-  const found = SENTENCES.find((x) => x.text === s.text)
-  const kana = found ? normalizeKana(found.reading) : null
+  const reading = readingOf(s.text)
+  const kana = reading ? normalizeKana(reading) : null
   const groups: { pos: number; keys: ReviewKey[] }[] = []
   for (const k of s.keys) {
     const last = groups[groups.length - 1]

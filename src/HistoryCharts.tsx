@@ -28,7 +28,7 @@ export default function HistoryCharts({ sessions, range, onRange, onSelect }: Pr
 
   const set = (next: Range) => onRange(next.to - next.from + 1 >= n ? null : next)
   const points = (value: (s: Session) => number) =>
-    shown.map((s) => ({ label: date(s.startedAt), note: `${s.kanaCount} かな`, value: value(s) }))
+    shown.map((s) => ({ label: date(s.startedAt), note: s.title ?? `${s.kanaCount} かな`, value: value(s) }))
 
   const shared = {
     wide: true,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AnalysisView from './AnalysisView'
 import Game from './Game'
 import HistoryCharts from './HistoryCharts'
@@ -7,19 +7,29 @@ import Result from './Result'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import SettingsView from './SettingsView'
 import { deleteSession, loadSessions, saveSession } from './storage'
-import { pickSentences } from './texts/pick'
-import type { Sentence } from './texts/sentences'
-import type { Session } from './types'
+import { OPTIMIZE_SENTENCES } from './texts/optimize'
+import { PASSAGES } from './texts/passages'
+import { pickPassage, pickSentences } from './texts/pick'
+import { SENTENCES, type Sentence } from './texts/sentences'
+import { MODES, modeLabel, modeOf, type Mode, type Session } from './types'
 
 type View =
   | { name: 'home' }
-  | { name: 'play'; sentences: Sentence[]; run: number }
+  | { name: 'play'; mode: Mode; title?: string; sentences: Sentence[]; run: number }
   | { name: 'result'; session: Session; saveError: string | null }
   | { name: 'analysis' }
   | { name: 'settings' }
 
 const KANA_COUNTS = [100, 200, 400]
 const COUNT_KEY = 'typing-game.kanaCount'
+const MODE_KEY = 'typing-game.mode'
+const PASSAGE_KEY = 'typing-game.passage'
+
+const MODE_NOTES: Record<Mode, string> = {
+  standard: '短い文を、決めたかな数だけ打ちます。',
+  optimize: '同じ指が続く並びを詰め込んだ文です。ガイド以外のつづり (ca / fu / ji など) も受け付けます。',
+  long: 'ひと続きの文章を最後まで打ち切ります。',
+}
 
 function App() {
   const [view, setView] = useState<View>({ name: 'home' })
@@ -30,17 +40,40 @@ function App() {
     return KANA_COUNTS.includes(saved) ? saved : 200
   })
 
+  const [mode, setMode] = useState<Mode>(() => {
+    const saved = localStorage.getItem(MODE_KEY)
+    return MODES.find((m) => m.id === saved)?.id ?? 'standard'
+  })
+  // 長文モードで打つ文章の題。null はおまかせ
+  const [passage, setPassage] = useState<string | null>(() => {
+    const saved = localStorage.getItem(PASSAGE_KEY)
+    return PASSAGES.some((p) => p.title === saved) ? saved : null
+  })
+  // おまかせで同じ文章が続かないよう、直前に出した題を覚えておく
+  const lastPassage = useRef<string | null>(null)
+
   const [settings, setSettings] = useState(loadSettings)
   // ホームの履歴グラフの表示範囲。null は全体
   const [range, setRange] = useState<Range | null>(null)
+
+  // 速度の水準がモードで違うので、推移も分析も選んでいるモードの記録だけで見る
+  const shown = useMemo(() => sessions.filter((s) => modeOf(s) === mode), [sessions, mode])
 
   useEffect(() => {
     loadSessions().then(setSessions, (e) => setLoadError(String(e)))
   }, [])
 
   const start = useCallback(() => {
-    setView({ name: 'play', sentences: pickSentences(kanaCount), run: Date.now() })
-  }, [kanaCount])
+    const run = Date.now()
+    if (mode === 'long') {
+      const { title, sentences } = pickPassage(passage, lastPassage.current)
+      lastPassage.current = title
+      setView({ name: 'play', mode, title, sentences, run })
+      return
+    }
+    const pool = mode === 'optimize' ? OPTIMIZE_SENTENCES : SENTENCES
+    setView({ name: 'play', mode, sentences: pickSentences(kanaCount, Math.random, pool), run })
+  }, [mode, kanaCount, passage])
 
   const home = useCallback(() => setView({ name: 'home' }), [])
 
@@ -88,6 +121,8 @@ function App() {
     return (
       <Game
         key={view.run}
+        mode={view.mode}
+        title={view.title}
         sentences={view.sentences}
         countdownSec={settings.countdownSec}
         showSentenceKps={settings.sentenceKps}
@@ -110,7 +145,7 @@ function App() {
     )
   }
   if (view.name === 'analysis') {
-    return <AnalysisView sessions={sessions} onBack={home} />
+    return <AnalysisView sessions={shown} label={modeLabel(mode)} onBack={home} />
   }
   if (view.name === 'settings') {
     return <SettingsView settings={settings} onChange={changeSettings} onBack={home} />
@@ -125,32 +160,66 @@ function App() {
 
       <section className="start">
         <div className="segmented">
-          {KANA_COUNTS.map((n) => (
+          {MODES.map((m) => (
             <button
-              key={n}
-              className={n === kanaCount ? 'on' : ''}
+              key={m.id}
+              className={m.id === mode ? 'on' : ''}
               onClick={() => {
-                setKanaCount(n)
-                localStorage.setItem(COUNT_KEY, String(n))
+                setMode(m.id)
+                localStorage.setItem(MODE_KEY, m.id)
+                // 表示範囲は回の番号で持っているので、記録の並びが変わったら全体に戻す
+                setRange(null)
               }}
             >
-              {n} かな
+              {m.label}
             </button>
           ))}
         </div>
+        {mode === 'long' ? (
+          <div className="segmented">
+            {[null, ...PASSAGES.map((p) => p.title)].map((title) => (
+              <button
+                key={title ?? ''}
+                className={title === passage ? 'on' : ''}
+                onClick={() => {
+                  setPassage(title)
+                  localStorage.setItem(PASSAGE_KEY, title ?? '')
+                }}
+              >
+                {title ?? 'おまかせ'}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="segmented">
+            {KANA_COUNTS.map((n) => (
+              <button
+                key={n}
+                className={n === kanaCount ? 'on' : ''}
+                onClick={() => {
+                  setKanaCount(n)
+                  localStorage.setItem(COUNT_KEY, String(n))
+                }}
+              >
+                {n} かな
+              </button>
+            ))}
+          </div>
+        )}
         <button className="primary" onClick={start}>
           スタート (Space / Enter)
         </button>
         <button onClick={() => setView({ name: 'analysis' })}>分析を見る</button>
       </section>
+      <p className="note">{MODE_NOTES[mode]}</p>
 
       {loadError && <p className="error">記録を読み込めませんでした: {loadError}</p>}
 
-      {sessions.length === 0 ? (
-        <p className="note">まだ記録がありません</p>
+      {shown.length === 0 ? (
+        <p className="note">{sessions.length === 0 ? 'まだ記録がありません' : 'このモードの記録はまだありません'}</p>
       ) : (
         <HistoryCharts
-          sessions={sessions}
+          sessions={shown}
           range={range}
           onRange={setRange}
           onSelect={(s) => setView({ name: 'result', session: s, saveError: null })}

@@ -620,6 +620,37 @@ td.spot-text {
   }
 }
 
+/* 長文モード。文章全体を枠に流し、いまの文を中ほどに保つ (送りは Game.tsx) */
+.game.long .game-banner {
+  height: 3.5rem;
+  margin-top: 0;
+}
+
+.passage {
+  position: relative;
+  height: 15rem;
+  overflow: hidden;
+  padding: 0 0.25rem;
+  font-size: 1.35rem;
+  line-height: 2.5rem;
+}
+
+.passage.waiting {
+  opacity: 0.45;
+}
+
+.passage .done {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.passage .now {
+  color: var(--text-h);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 3px;
+}
+
 .sentence-next {
   margin: 1.5rem 0 0;
   text-align: center;

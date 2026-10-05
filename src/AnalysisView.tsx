@@ -4,7 +4,8 @@ import LineChart from './LineChart'
 import StatTable from './StatTable'
 import { kps, type Session } from './types'
 
-type Props = { sessions: Session[]; onBack: () => void }
+// sessions は1つのモードの記録だけを渡す。label はそのモード名
+type Props = { sessions: Session[]; label: string; onBack: () => void }
 
 const RANGES = [
   { label: '直近10回', size: 10 },
@@ -26,7 +27,7 @@ const byMissRate = (rows: Row[], minCount: number, limit: number) =>
     .sort((a, b) => b.missRate - a.missRate)
     .slice(0, limit)
 
-export default function AnalysisView({ sessions, onBack }: Props) {
+export default function AnalysisView({ sessions, label, onBack }: Props) {
   const [size, setSize] = useState(RANGES[1].size)
   const target = useMemo(() => sessions.slice(-size), [sessions, size])
   const a = useMemo(() => analyze(target), [target])
@@ -37,10 +38,10 @@ export default function AnalysisView({ sessions, onBack }: Props) {
     return (
       <main className="page">
         <header className="page-head">
-          <h2>分析</h2>
+          <h2>分析 ({label})</h2>
           <button onClick={onBack}>戻る</button>
         </header>
-        <p className="note">まだ記録がありません。まず1回プレイしてください。</p>
+        <p className="note">このモードの記録がまだありません。まず1回プレイしてください。</p>
       </main>
     )
   }
@@ -52,7 +53,7 @@ export default function AnalysisView({ sessions, onBack }: Props) {
   return (
     <main className="page">
       <header className="page-head">
-        <h2>分析</h2>
+        <h2>分析 ({label})</h2>
         <div className="segmented">
           {RANGES.map((r) => (
             <button key={r.label} className={r.size === size ? 'on' : ''} onClick={() => setSize(r.size)}>
