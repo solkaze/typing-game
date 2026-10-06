@@ -3,7 +3,7 @@ import { defaultRomaji, Typist } from '../romaji/engine'
 import { sameFingerRate } from './fingers'
 import { OPTIMIZE_SENTENCES } from './optimize'
 import { PASSAGES } from './passages'
-import { pickPassage, pickSentences } from './pick'
+import { pickPassage, pickRound, pickSentences } from './pick'
 import { SENTENCES } from './sentences'
 
 const ALL = [...SENTENCES, ...OPTIMIZE_SENTENCES, ...PASSAGES.flatMap((p) => p.sentences)]
@@ -77,6 +77,18 @@ describe('pickSentences', () => {
         expect(sum).toBe(count)
         expect(new Set(picked).size).toBe(picked.length)
       }
+    }
+  })
+})
+
+describe('pickRound', () => {
+  it('returns every sentence once, never starting with the one to avoid', () => {
+    const round = pickRound()
+    expect(round).toHaveLength(SENTENCES.length)
+    expect(new Set(round).size).toBe(SENTENCES.length)
+    for (const avoid of SENTENCES) {
+      // 乱数を 0.999 に固定すると並べ替えが起きず、先頭は必ず SENTENCES[0] になる
+      expect(pickRound(avoid, () => 0.999)[0]).not.toBe(avoid)
     }
   })
 })

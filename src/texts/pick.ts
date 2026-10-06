@@ -55,3 +55,17 @@ export function pickPassage(
   const from = rest.length > 0 ? rest : pool
   return from[Math.floor(random() * from.length)]
 }
+
+// エンドレス用に、文をすべて並べ替えた1巡ぶんを返す。
+// 巡の境目で同じ文が続かないよう、先頭は avoid 以外にする
+export function pickRound(
+  avoid: Sentence | null = null,
+  random: () => number = Math.random,
+  pool: readonly Sentence[] = SENTENCES,
+): Sentence[] {
+  const round = shuffled(pool, random)
+  if (round.length > 1 && round[0] === avoid) {
+    ;[round[0], round[1]] = [round[1], round[0]]
+  }
+  return round
+}

@@ -8,6 +8,10 @@ type Props = {
   // 長文モードの文章の題
   title?: string
   sentences: Sentence[]
+  // エンドレスモード: この回数ミスしたら終わり
+  missLimit?: number
+  // エンドレスモード: 文が尽きる前に呼んで続きをもらう。last は今ある最後の文
+  more?: (last: Sentence) => Sentence[]
   // 開始前のカウントダウン秒数。0 ならすぐ打てる
   countdownSec: number
   showSentenceKps: boolean
@@ -16,6 +20,8 @@ type Props = {
 }
 
 type Run = {
+  // エンドレスでは打ち進むにつれて継ぎ足す
+  sentences: Sentence[]
   typists: Typist[]
   index: number
   startedAt: string
@@ -34,6 +40,7 @@ type Run = {
 
 function newRun(sentences: Sentence[]): Run {
   return {
+    sentences: [...sentences],
     typists: sentences.map((s) => new Typist(s.reading)),
     index: 0,
     startedAt: '',
@@ -51,14 +58,16 @@ function newRun(sentences: Sentence[]): Run {
 export default function Game({
   mode,
   title,
-  sentences,
+  sentences: initial,
+  missLimit,
+  more,
   countdownSec,
   showSentenceKps,
   onFinish,
   onAbort,
 }: Props) {
   const run = useRef<Run>(null)
-  if (run.current === null) run.current = newRun(sentences)
+  if (run.current === null) run.current = newRun(initial)
   const [, redraw] = useReducer((n: number) => n + 1, 0)
   const [elapsed, setElapsed] = useState(0)
   const [imeOn, setImeOn] = useState(false)
@@ -99,8 +108,29 @@ export default function Game({
       const ok = typist.input(e.key)
       r.keystrokes.push({ t, key: e.key, code: e.code, ok, expected, sentence: r.index, kanaPos })
 
+      const finish = () =>
+        onFinish({
+          mode,
+          title,
+          missLimit,
+          completed: missLimit === undefined ? undefined : r.index,
+          startedAt: r.startedAt,
+          // エンドレスは文の途中で終わるので、そこまでに打てたかなも数える
+          kanaCount: r.kanaDone + (typist.done ? 0 : typist.kanaPos),
+          durationMs: t,
+          correct: r.correct,
+          misses: r.misses,
+          // 継ぎ足して先読みしただけの文は残さない
+          texts: r.sentences.slice(0, r.index + 1).map((s) => s.text),
+          keystrokes: r.keystrokes,
+        })
+
       if (!ok) {
         r.misses++
+        if (missLimit !== undefined && r.misses >= missLimit) {
+          finish()
+          return
+        }
         setMissTick((n) => n + 1)
         return
       }
@@ -114,26 +144,22 @@ export default function Game({
         r.sentenceCorrect = 0
         r.kanaDone += typist.kana.length
         r.index++
+        // 次の文の予告まで出せるよう、1文先まで用意しておく
+        if (more && r.index + 1 >= r.sentences.length) {
+          const added = more(r.sentences[r.sentences.length - 1])
+          r.sentences.push(...added)
+          r.typists.push(...added.map((s) => new Typist(s.reading)))
+        }
       }
       if (r.index === r.typists.length) {
-        onFinish({
-          mode,
-          title,
-          startedAt: r.startedAt,
-          kanaCount: r.kanaDone,
-          durationMs: t,
-          correct: r.correct,
-          misses: r.misses,
-          texts: sentences.map((s) => s.text),
-          keystrokes: r.keystrokes,
-        })
+        finish()
         return
       }
       redraw()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [mode, title, sentences, count, onFinish, onAbort])
+  }, [mode, title, missLimit, more, count, onFinish, onAbort])
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -144,12 +170,14 @@ export default function Game({
   }, [])
 
   const r = run.current
+  const sentences = r.sentences
   const index = Math.min(r.index, sentences.length - 1)
   const typist = r.typists[index]
   const kanaTotal = r.typists.reduce((n, t) => n + t.kana.length, 0)
   const kanaNow = r.kanaDone + (typist.done ? 0 : typist.kanaPos)
   const next = sentences[index + 1]
   const long = mode === 'long'
+  const endless = missLimit !== undefined
 
   // 長文では、いま打っている文が枠の中ほどに来るよう送る。行が上下で切れないよう行の高さ単位で止める
   const passage = useRef<HTMLElement>(null)
@@ -166,14 +194,17 @@ export default function Game({
   return (
     <main className={long ? 'game long' : 'game'}>
       <header className="game-status">
-        <span>
-          {kanaNow} / {kanaTotal} かな
-        </span>
+        <span>{endless ? `${kanaNow} かな・${r.index} 文` : `${kanaNow} / ${kanaTotal} かな`}</span>
         <span>{(elapsed / 1000).toFixed(1)} 秒</span>
-        <span>ミス {r.misses}</span>
+        <span>{endless ? `ミス ${r.misses} / ${missLimit}` : `ミス ${r.misses}`}</span>
       </header>
 
-      <progress value={kanaNow} max={kanaTotal} />
+      {/* エンドレスには終わりの位置が無いので、残りのミス回数を出す */}
+      {endless ? (
+        <progress value={missLimit - r.misses} max={missLimit} />
+      ) : (
+        <progress value={kanaNow} max={kanaTotal} />
+      )}
 
       <p className="game-banner">
         {count > 0 ? (

@@ -26,20 +26,23 @@ const date = (iso: string) => new Date(iso).toLocaleString('ja-JP', { dateStyle:
 export default function Result({ session, sessions, saveError, onRetry, onHome, onDelete, onAnalysis }: Props) {
   const a = useMemo(() => analyze([session]), [session])
   const mode = modeOf(session)
-  // 同じモードの、この回より前の直近の記録。長文は文章ごとに長さが違うので、かな数は揃えない
+  const endless = mode === 'endless'
+  // 同じモードの、この回より前の直近の記録。長文は文章ごとに長さが違うので、かな数は揃えない。
+  // エンドレスはかな数が記録そのものなので、代わりにミスの上限を揃える
   const recent = useMemo(
     () =>
       sessions
         .filter(
           (s) =>
             modeOf(s) === mode &&
-            (mode === 'long' || s.kanaCount === session.kanaCount) &&
+            (mode === 'long' || (endless ? s.missLimit === session.missLimit : s.kanaCount === session.kanaCount)) &&
             s.startedAt < session.startedAt,
         )
         .slice(-RECENT),
-    [sessions, session, mode],
+    [sessions, session, mode, endless],
   )
   const kpsDiff = recent.length ? kps(session) - mean(recent.map(kps)) : null
+  const kanaDiff = recent.length ? session.kanaCount - mean(recent.map((s) => s.kanaCount)) : null
   const accDiff = recent.length ? (accuracy(session) - mean(recent.map(accuracy))) * 100 : null
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
         <h2>結果</h2>
         <span className="note">
           {modeLabel(mode)}
+          {endless && ` (ミス ${session.missLimit} 回まで)`}
           {session.title && `「${session.title}」`}　{date(session.startedAt)}
         </span>
       </header>
@@ -86,6 +90,24 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
       <div className="actions">{actions}</div>
 
       <section className="tiles">
+        {/* エンドレスは打てた量が記録なので先頭に出す */}
+        {endless && (
+          <>
+            <div className="tile">
+              <span className="tile-label">かな</span>
+              <span className="tile-value">{session.kanaCount} 字</span>
+              {kanaDiff !== null && (
+                <span className="tile-note">
+                  直近 {recent.length} 回の平均比 {signed(kanaDiff, 1)}
+                </span>
+              )}
+            </div>
+            <div className="tile">
+              <span className="tile-label">打ち切った文</span>
+              <span className="tile-value">{session.completed ?? 0} 文</span>
+            </div>
+          </>
+        )}
         <div className="tile">
           <span className="tile-label">タイム</span>
           <span className="tile-value">{(session.durationMs / 1000).toFixed(2)} 秒</span>
@@ -114,10 +136,12 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
             {session.correct} / {session.misses}
           </span>
         </div>
-        <div className="tile">
-          <span className="tile-label">かな</span>
-          <span className="tile-value">{session.kanaCount} 字</span>
-        </div>
+        {!endless && (
+          <div className="tile">
+            <span className="tile-label">かな</span>
+            <span className="tile-value">{session.kanaCount} 字</span>
+          </div>
+        )}
       </section>
 
       {saveError && <p className="error">記録を保存できませんでした: {saveError}</p>}

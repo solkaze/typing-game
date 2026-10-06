@@ -9,13 +9,13 @@ import SettingsView from './SettingsView'
 import { deleteSession, loadSessions, saveSession } from './storage'
 import { OPTIMIZE_SENTENCES } from './texts/optimize'
 import { PASSAGES } from './texts/passages'
-import { pickPassage, pickSentences } from './texts/pick'
+import { pickPassage, pickRound, pickSentences } from './texts/pick'
 import { SENTENCES, type Sentence } from './texts/sentences'
 import { MODES, modeLabel, modeOf, type Mode, type Session } from './types'
 
 type View =
   | { name: 'home' }
-  | { name: 'play'; mode: Mode; title?: string; sentences: Sentence[]; run: number }
+  | { name: 'play'; mode: Mode; title?: string; missLimit?: number; sentences: Sentence[]; run: number }
   | { name: 'result'; session: Session; saveError: string | null }
   | { name: 'analysis' }
   | { name: 'settings' }
@@ -24,11 +24,15 @@ const KANA_COUNTS = [100, 200, 400]
 const COUNT_KEY = 'typing-game.kanaCount'
 const MODE_KEY = 'typing-game.mode'
 const PASSAGE_KEY = 'typing-game.passage'
+// エンドレスモードで、終わりにするミスの回数
+const MISS_LIMITS = [3, 5, 10, 20]
+const MISS_KEY = 'typing-game.missLimit'
 
 const MODE_NOTES: Record<Mode, string> = {
   standard: '短い文を、決めたかな数だけ打ちます。',
   optimize: '同じ指が続く並びを詰め込んだ文です。ガイド以外のつづり (ca / fu / ji など) も受け付けます。',
   long: 'ひと続きの文章を最後まで打ち切ります。',
+  endless: '決めた回数ミスするまで、短い文を打ち続けます。打てたかな数が記録になります。',
 }
 
 function App() {
@@ -49,6 +53,10 @@ function App() {
     const saved = localStorage.getItem(PASSAGE_KEY)
     return PASSAGES.some((p) => p.title === saved) ? saved : null
   })
+  const [missLimit, setMissLimit] = useState(() => {
+    const saved = Number(localStorage.getItem(MISS_KEY))
+    return MISS_LIMITS.includes(saved) ? saved : 10
+  })
   // おまかせで同じ文章が続かないよう、直前に出した題を覚えておく
   const lastPassage = useRef<string | null>(null)
 
@@ -56,8 +64,14 @@ function App() {
   // ホームの履歴グラフの表示範囲。null は全体
   const [range, setRange] = useState<Range | null>(null)
 
-  // 速度の水準がモードで違うので、推移も分析も選んでいるモードの記録だけで見る
-  const shown = useMemo(() => sessions.filter((s) => modeOf(s) === mode), [sessions, mode])
+  // 速度の水準がモードで違うので、推移も分析も選んでいるモードの記録だけで見る。
+  // エンドレスは打てるかな数がミスの上限で変わるので、上限も揃える
+  const shown = useMemo(
+    () => sessions.filter((s) => modeOf(s) === mode && (mode !== 'endless' || s.missLimit === missLimit)),
+    [sessions, mode, missLimit],
+  )
+
+  const shownLabel = mode === 'endless' ? `${modeLabel(mode)} (ミス ${missLimit} 回まで)` : modeLabel(mode)
 
   useEffect(() => {
     loadSessions().then(setSessions, (e) => setLoadError(String(e)))
@@ -71,9 +85,13 @@ function App() {
       setView({ name: 'play', mode, title, sentences, run })
       return
     }
+    if (mode === 'endless') {
+      setView({ name: 'play', mode, missLimit, sentences: pickRound(), run })
+      return
+    }
     const pool = mode === 'optimize' ? OPTIMIZE_SENTENCES : SENTENCES
     setView({ name: 'play', mode, sentences: pickSentences(kanaCount, Math.random, pool), run })
-  }, [mode, kanaCount, passage])
+  }, [mode, kanaCount, passage, missLimit])
 
   const home = useCallback(() => setView({ name: 'home' }), [])
 
@@ -124,6 +142,8 @@ function App() {
         mode={view.mode}
         title={view.title}
         sentences={view.sentences}
+        missLimit={view.missLimit}
+        more={view.mode === 'endless' ? pickRound : undefined}
         countdownSec={settings.countdownSec}
         showSentenceKps={settings.sentenceKps}
         onFinish={finish}
@@ -145,7 +165,7 @@ function App() {
     )
   }
   if (view.name === 'analysis') {
-    return <AnalysisView sessions={shown} label={modeLabel(mode)} onBack={home} />
+    return <AnalysisView sessions={shown} label={shownLabel} onBack={home} />
   }
   if (view.name === 'settings') {
     return <SettingsView settings={settings} onChange={changeSettings} onBack={home} />
@@ -159,7 +179,7 @@ function App() {
       </header>
 
       <section className="start">
-        <div className="segmented">
+        <div className="mode-tabs">
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -175,51 +195,81 @@ function App() {
             </button>
           ))}
         </div>
-        {mode === 'long' ? (
-          <div className="segmented">
-            {[null, ...PASSAGES.map((p) => p.title)].map((title) => (
-              <button
-                key={title ?? ''}
-                className={title === passage ? 'on' : ''}
-                onClick={() => {
-                  setPassage(title)
-                  localStorage.setItem(PASSAGE_KEY, title ?? '')
-                }}
-              >
-                {title ?? 'おまかせ'}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="segmented">
-            {KANA_COUNTS.map((n) => (
-              <button
-                key={n}
-                className={n === kanaCount ? 'on' : ''}
-                onClick={() => {
-                  setKanaCount(n)
-                  localStorage.setItem(COUNT_KEY, String(n))
-                }}
-              >
-                {n} かな
-              </button>
-            ))}
-          </div>
-        )}
-        <button className="primary" onClick={start}>
-          スタート (Space / Enter)
-        </button>
-        <button onClick={() => setView({ name: 'analysis' })}>分析を見る</button>
+        {/* 選んだモードにぶら下がる項目。モードの下に続けて置く */}
+        <div className="mode-body">
+          <p className="note">{MODE_NOTES[mode]}</p>
+          {mode === 'long' ? (
+            // 文章は増えていくので、横に並べずに選ばせる
+            <select
+              value={passage ?? ''}
+              onChange={(e) => {
+                const title = e.target.value || null
+                setPassage(title)
+                localStorage.setItem(PASSAGE_KEY, title ?? '')
+                // 選んだあと Space / Enter でそのまま始められるよう、フォーカスを外す
+                e.target.blur()
+              }}
+            >
+              <option value="">おまかせ</option>
+              {PASSAGES.map((p) => (
+                <option key={p.title} value={p.title}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          ) : mode === 'endless' ? (
+            <div className="segmented">
+              {MISS_LIMITS.map((n) => (
+                <button
+                  key={n}
+                  className={n === missLimit ? 'on' : ''}
+                  onClick={() => {
+                    setMissLimit(n)
+                    localStorage.setItem(MISS_KEY, String(n))
+                    setRange(null)
+                  }}
+                >
+                  ミス {n} 回まで
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="segmented">
+              {KANA_COUNTS.map((n) => (
+                <button
+                  key={n}
+                  className={n === kanaCount ? 'on' : ''}
+                  onClick={() => {
+                    setKanaCount(n)
+                    localStorage.setItem(COUNT_KEY, String(n))
+                  }}
+                >
+                  {n} かな
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="launch">
+          <button className="primary" onClick={start}>
+            スタート
+            <small>Space / Enter</small>
+          </button>
+          <button className="analysis" onClick={() => setView({ name: 'analysis' })}>
+            分析を見る
+            <small>{shownLabel}</small>
+          </button>
+        </div>
       </section>
-      <p className="note">{MODE_NOTES[mode]}</p>
 
       {loadError && <p className="error">記録を読み込めませんでした: {loadError}</p>}
 
       {shown.length === 0 ? (
-        <p className="note">{sessions.length === 0 ? 'まだ記録がありません' : 'このモードの記録はまだありません'}</p>
+        <p className="note">{sessions.length === 0 ? 'まだ記録がありません' : 'この条件の記録はまだありません'}</p>
       ) : (
         <HistoryCharts
           sessions={shown}
+          mode={mode}
           range={range}
           onRange={setRange}
           onSelect={(s) => setView({ name: 'result', session: s, saveError: null })}

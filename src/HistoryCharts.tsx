@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import LineChart from './LineChart'
 import { clampRange, lastRange, MIN_SPAN, panRange, zoomRange, type Range } from './range'
-import { accuracy, kps, type Session } from './types'
+import { accuracy, kps, type Mode, type Session } from './types'
 
 type Props = {
   sessions: Session[]
+  mode: Mode
   // null は全体。詳細から戻っても拡大したままにするため親が持つ
   range: Range | null
   onRange: (range: Range | null) => void
@@ -19,7 +20,7 @@ const date = (iso: string) => {
 }
 
 // 全記録の推移。速度と正答率は単位が違うので軸を分け、表示範囲と指している回だけを揃える
-export default function HistoryCharts({ sessions, range, onRange, onSelect }: Props) {
+export default function HistoryCharts({ sessions, mode, range, onRange, onSelect }: Props) {
   const [hover, setHover] = useState<number | null>(null)
   const n = sessions.length
   const r = clampRange(range, n)
@@ -28,7 +29,7 @@ export default function HistoryCharts({ sessions, range, onRange, onSelect }: Pr
 
   const set = (next: Range) => onRange(next.to - next.from + 1 >= n ? null : next)
   const points = (value: (s: Session) => number) =>
-    shown.map((s) => ({ label: date(s.startedAt), note: s.title ?? `${s.kanaCount} かな`, value: value(s) }))
+    shown.map((s) => ({ label: date(s.startedAt), note: s.title ?? (mode === 'endless' ? `${s.completed ?? 0} 文` : `${s.kanaCount} かな`), value: value(s) }))
 
   const shared = {
     wide: true,
@@ -63,6 +64,10 @@ export default function HistoryCharts({ sessions, range, onRange, onSelect }: Pr
           </button>
         </div>
       </header>
+      {/* エンドレスは打てた量が記録なので、いちばん上に置く */}
+      {mode === 'endless' && (
+        <LineChart title="打てたかな数" points={points((s) => s.kanaCount)} {...shared} format={(v) => v.toFixed(0)} />
+      )}
       <LineChart title="速度 (打/秒)" points={points(kps)} {...shared} />
       <LineChart title="正答率 (%)" points={points((s) => accuracy(s) * 100)} {...shared} />
       <p className="note">

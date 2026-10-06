@@ -68,7 +68,8 @@ h3 {
   font-size: 1rem;
 }
 
-button {
+button,
+select {
   font: inherit;
   color: var(--text-h);
   background: var(--panel);
@@ -143,11 +144,102 @@ button.quiet {
   max-width: 960px;
 }
 
-.start,
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+/* ホームの開始欄。モード → そのモードの項目 → 開始 / 分析 と上から下へ並べる */
+.start {
+  display: flex;
+  flex-direction: column;
+}
+
+.mode-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.mode-tabs button {
+  padding: 0.7rem 0.5rem;
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  border-radius: 0;
+  margin-left: -1px;
+}
+
+.mode-tabs button:first-child {
+  border-radius: 8px 0 0 0;
+  margin-left: 0;
+}
+
+.mode-tabs button:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+/* 選んだモードは下の枠と地続きに見せる */
+.mode-tabs button.on {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--bg);
+  border-bottom-color: var(--bg);
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.mode-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.mode-body .note {
+  margin: 0;
+}
+
+.launch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.launch button {
+  flex: 1 1 14rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 8px;
+}
+
+.launch button.primary {
+  flex-grow: 2;
+}
+
+.launch button.analysis {
+  background: var(--bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.launch button.analysis:hover {
+  background: var(--panel);
+}
+
+.launch small {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.8;
 }
 
 .panel {
