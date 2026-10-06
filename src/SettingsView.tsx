@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { COUNTDOWN_OPTIONS, type Settings } from './settings'
+import { COUNTDOWN_OPTIONS, SENTENCE_KPS_OPTIONS, type Settings } from './settings'
 
 type Props = {
   settings: Settings
@@ -42,15 +42,35 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
           </div>
         </div>
 
-        <label className="setting">
+        <div className="setting">
           <div>
             <span className="setting-label">文ごとの速度を表示</span>
-            <p className="note">文を打ち終えるたびに、その文の速度 (打/秒) をプレイ画面に表示します</p>
+            <p className="note">
+              文を打ち終えるたびに、その文の速度 (打/秒) を表示します。「下に一瞬」は文のすぐ下に大きく出て消えます
+            </p>
+          </div>
+          <div className="segmented">
+            {SENTENCE_KPS_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={o.value === settings.sentenceKps ? 'on' : ''}
+                onClick={() => onChange({ ...settings, sentenceKps: o.value })}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="setting">
+          <div>
+            <span className="setting-label">ローマ字ガイドを隠す</span>
+            <p className="note">まだ打っていないローマ字を表示せず、打った文字だけを表示します</p>
           </div>
           <input
             type="checkbox"
-            checked={settings.sentenceKps}
-            onChange={(e) => onChange({ ...settings, sentenceKps: e.target.checked })}
+            checked={settings.hideGuide}
+            onChange={(e) => onChange({ ...settings, hideGuide: e.target.checked })}
           />
         </label>
       </section>

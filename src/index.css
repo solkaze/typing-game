@@ -701,6 +701,17 @@ td.spot-text {
   opacity: 0.55;
 }
 
+/* ガイドを隠す設定。打った文字が主役になるので薄くしない */
+.sentence-romaji.blind .done {
+  color: inherit;
+  opacity: 1;
+}
+
+.sentence-romaji .hidden {
+  visibility: hidden;
+  user-select: none;
+}
+
 .sentence-romaji.miss {
   animation: miss 0.25s ease-out;
 }
@@ -741,6 +752,53 @@ td.spot-text {
   background: var(--panel);
   box-shadow: 0 0 0 1px var(--border);
   border-radius: 3px;
+}
+
+/* 打ち終えた文の速度を一瞬だけ出す場所 (設定「下に一瞬」) */
+.sentence-pop {
+  height: 2.5rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.sentence-pop strong {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent);
+  animation: kps-pop 1.4s ease-out forwards;
+}
+
+.sentence-pop small {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+@keyframes kps-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.4rem) scale(1.25);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+  }
+  60% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+.sentence-pop + .sentence-next {
+  margin-top: 0;
 }
 
 .sentence-next {

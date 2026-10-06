@@ -145,7 +145,8 @@ function App() {
         missLimit={view.missLimit}
         more={view.mode === 'endless' ? pickRound : undefined}
         countdownSec={settings.countdownSec}
-        showSentenceKps={settings.sentenceKps}
+        sentenceKps={settings.sentenceKps}
+        hideGuide={settings.hideGuide}
         onFinish={finish}
         onAbort={home}
       />

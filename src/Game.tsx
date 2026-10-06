@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { Typist } from './romaji/engine'
+import type { SentenceKps } from './settings'
 import type { Sentence } from './texts/sentences'
 import type { Keystroke, Mode, Session } from './types'
 
@@ -14,7 +15,9 @@ type Props = {
   more?: (last: Sentence) => Sentence[]
   // 開始前のカウントダウン秒数。0 ならすぐ打てる
   countdownSec: number
-  showSentenceKps: boolean
+  sentenceKps: SentenceKps
+  // まだ打っていないローマ字を隠す
+  hideGuide: boolean
   onFinish: (session: Session) => void
   onAbort: () => void
 }
@@ -62,7 +65,8 @@ export default function Game({
   missLimit,
   more,
   countdownSec,
-  showSentenceKps,
+  sentenceKps,
+  hideGuide,
   onFinish,
   onAbort,
 }: Props) {
@@ -211,7 +215,7 @@ export default function Game({
           <strong key={count} className="countdown">
             {count}
           </strong>
-        ) : showSentenceKps && r.lastKps !== null ? (
+        ) : sentenceKps === 'banner' && r.lastKps !== null ? (
           `前の文 ${r.lastKps.toFixed(2)} 打/秒`
         ) : (
           ' '
@@ -238,11 +242,24 @@ export default function Game({
           <span className="done">{typist.kana.slice(0, typist.kanaPos)}</span>
           {typist.kana.slice(typist.kanaPos)}
         </p>
-        <p key={missTick} className={missTick > 0 ? 'sentence-romaji miss' : 'sentence-romaji'}>
+        <p key={missTick} className={`sentence-romaji${hideGuide ? ' blind' : ''}${missTick > 0 ? ' miss' : ''}`}>
           <span className="done">{typist.typed}</span>
-          {typist.guide}
+          {/* 隠すときも場所は取っておき、打った文字の位置がずれないようにする */}
+          {hideGuide ? <span className="hidden">{typist.guide}</span> : typist.guide}
         </p>
       </section>
+
+      {/* 文が替わるたびに作り直して、出て消える動きをやり直す。出し入れで下が動かないよう場所は常に取る */}
+      {sentenceKps === 'pop' && (
+        <p className="sentence-pop">
+          {r.lastKps !== null && (
+            <strong key={r.index}>
+              {r.lastKps.toFixed(2)}
+              <small> 打/秒</small>
+            </strong>
+          )}
+        </p>
+      )}
 
       {!long && <p className="sentence-next">{next ? next.text : ' '}</p>}
 
