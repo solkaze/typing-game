@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { analyze, worst, type Row } from './analysis'
 import LineChart from './LineChart'
+import { spellings } from './spelling'
+import SpellingTable from './SpellingTable'
 import StatTable from './StatTable'
 import { kps, type Session } from './types'
 
@@ -33,6 +35,14 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
   const a = useMemo(() => analyze(target), [target])
   // 回数の少ない連なりは偶然の影響が大きいので、データ量に応じて足切りする
   const minCount = Math.max(3, Math.round(a.hits / 400))
+  const spelled = useMemo(
+    () =>
+      spellings(target)
+        .filter((r) => r.count >= minCount)
+        .filter((r) => r.variants.filter((v) => v.count > 0).length > 1 || r.shorter !== null)
+        .slice(0, 20),
+    [target, minCount],
+  )
 
   if (sessions.length === 0) {
     return (
@@ -141,6 +151,8 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
         />
         <StatTable title="ミスしやすい 2 連" rows={byMissRate(a.bigrams, minCount, 15)} />
         <StatTable title="キー別" note="損失時間の大きい順" rows={worst(a.keys, minCount, 40)} />
+
+        <SpellingTable rows={spelled} />
 
         <section className="panel">
           <h3>打ち間違い</h3>

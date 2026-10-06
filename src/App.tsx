@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AnalysisView from './AnalysisView'
+import { pickDrill, plan } from './drill'
 import Game from './Game'
 import HistoryCharts from './HistoryCharts'
 import type { Range } from './range'
 import Result from './Result'
 import { loadSettings, saveSettings, type Settings } from './settings'
+import { preferred, spellings } from './spelling'
 import SettingsView from './SettingsView'
 import { deleteSession, loadSessions, saveSession } from './storage'
 import { OPTIMIZE_SENTENCES } from './texts/optimize'
@@ -27,12 +29,17 @@ const PASSAGE_KEY = 'typing-game.passage'
 // エンドレスモードで、終わりにするミスの回数
 const MISS_LIMITS = [3, 5, 10, 20]
 const MISS_KEY = 'typing-game.missLimit'
+// 弱点とふだんの打ち方を調べるのに使う直近の記録の数。古い癖を引きずらないよう絞る
+const RECENT_SESSIONS = 30
+// ホームに出す狙いの2連の数
+const DRILL_SHOWN = 8
 
 const MODE_NOTES: Record<Mode, string> = {
   standard: '短い文を、決めたかな数だけ打ちます。',
   optimize: '同じ指が続く並びを詰め込んだ文です。ガイド以外のつづり (ca / fu / ji など) も受け付けます。',
   long: 'ひと続きの文章を最後まで打ち切ります。',
   endless: '決めた回数ミスするまで、短い文を打ち続けます。打てたかな数が記録になります。',
+  weak: 'これまでの記録で遅い並び・打ち間違えやすい並びが多く入った文を選んで出します。',
 }
 
 function App() {
@@ -71,6 +78,12 @@ function App() {
     [sessions, mode, missLimit],
   )
 
+  // 弱点はモードを問わず直近の記録から拾う。弱点モード自身の記録も入るので、直れば狙いが移る
+  const recent = useMemo(() => sessions.slice(-RECENT_SESSIONS), [sessions])
+  const drill = useMemo(() => plan(recent), [recent])
+  // ふだんの打ち方も、モードを問わず直近の記録から
+  const habits = useMemo(() => preferred(spellings(recent)), [recent])
+
   const shownLabel = mode === 'endless' ? `${modeLabel(mode)} (ミス ${missLimit} 回まで)` : modeLabel(mode)
 
   useEffect(() => {
@@ -89,9 +102,13 @@ function App() {
       setView({ name: 'play', mode, missLimit, sentences: pickRound(), run })
       return
     }
+    if (mode === 'weak') {
+      setView({ name: 'play', mode, sentences: pickDrill(kanaCount, drill), run })
+      return
+    }
     const pool = mode === 'optimize' ? OPTIMIZE_SENTENCES : SENTENCES
     setView({ name: 'play', mode, sentences: pickSentences(kanaCount, Math.random, pool), run })
-  }, [mode, kanaCount, passage, missLimit])
+  }, [mode, kanaCount, passage, missLimit, drill])
 
   const home = useCallback(() => setView({ name: 'home' }), [])
 
@@ -147,6 +164,10 @@ function App() {
         countdownSec={settings.countdownSec}
         sentenceKps={settings.sentenceKps}
         hideGuide={settings.hideGuide}
+        prefer={settings.ownSpelling ? habits : undefined}
+        keySound={settings.keySound}
+        missSound={settings.missSound}
+        volume={settings.volume}
         onFinish={finish}
         onAbort={home}
       />
@@ -249,6 +270,13 @@ function App() {
                 </button>
               ))}
             </div>
+          )}
+          {mode === 'weak' && (
+            <p className="note">
+              {drill.targets.length > 0
+                ? `いまの狙い: ${drill.targets.slice(0, DRILL_SHOWN).map((t) => t.label).join('　')}`
+                : '記録がまだ少ないので、狙いが決まるまでは文を無作為に出します。'}
+            </p>
           )}
         </div>
         <div className="launch">

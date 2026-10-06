@@ -12,14 +12,15 @@ export type Keystroke = {
 }
 
 // standard: 短文を決まったかな数だけ / optimize: 同じ指が続く並びを詰めた文 / long: ひと続きの長文 /
-// endless: 決めた回数ミスするまで短文を打ち続ける
-export type Mode = 'standard' | 'optimize' | 'long' | 'endless'
+// endless: 決めた回数ミスするまで短文を打ち続ける / weak: これまでの記録で遅い・誤打しやすい2連が濃い文
+export type Mode = 'standard' | 'optimize' | 'long' | 'endless' | 'weak'
 
 export const MODES: { id: Mode; label: string }[] = [
   { id: 'standard', label: '通常' },
   { id: 'optimize', label: '最適化' },
   { id: 'long', label: '長文' },
   { id: 'endless', label: 'エンドレス' },
+  { id: 'weak', label: '弱点' },
 ]
 
 export type Session = {

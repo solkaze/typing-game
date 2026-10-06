@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { Typist } from './romaji/engine'
 import type { SentenceKps } from './settings'
+import { playKey, playMiss, type KeySound, type MissSound } from './sound'
 import type { Sentence } from './texts/sentences'
 import type { Keystroke, Mode, Session } from './types'
 
@@ -18,6 +19,11 @@ type Props = {
   sentenceKps: SentenceKps
   // まだ打っていないローマ字を隠す
   hideGuide: boolean
+  // かな -> ガイドで優先する打ち方
+  prefer?: ReadonlyMap<string, string>
+  keySound: KeySound
+  missSound: MissSound
+  volume: number
   onFinish: (session: Session) => void
   onAbort: () => void
 }
@@ -41,10 +47,10 @@ type Run = {
   lastKps: number | null
 }
 
-function newRun(sentences: Sentence[]): Run {
+function newRun(sentences: Sentence[], prefer?: ReadonlyMap<string, string>): Run {
   return {
     sentences: [...sentences],
-    typists: sentences.map((s) => new Typist(s.reading)),
+    typists: sentences.map((s) => new Typist(s.reading, prefer)),
     index: 0,
     startedAt: '',
     origin: null,
@@ -67,11 +73,15 @@ export default function Game({
   countdownSec,
   sentenceKps,
   hideGuide,
+  prefer,
+  keySound,
+  missSound,
+  volume,
   onFinish,
   onAbort,
 }: Props) {
   const run = useRef<Run>(null)
-  if (run.current === null) run.current = newRun(initial)
+  if (run.current === null) run.current = newRun(initial, prefer)
   const [, redraw] = useReducer((n: number) => n + 1, 0)
   const [elapsed, setElapsed] = useState(0)
   const [imeOn, setImeOn] = useState(false)
@@ -110,6 +120,8 @@ export default function Game({
       const expected = typist.guide[0]
       const kanaPos = typist.kanaPos
       const ok = typist.input(e.key)
+      if (ok) playKey(keySound, volume)
+      else playMiss(missSound, volume)
       r.keystrokes.push({ t, key: e.key, code: e.code, ok, expected, sentence: r.index, kanaPos })
 
       const finish = () =>
@@ -152,7 +164,7 @@ export default function Game({
         if (more && r.index + 1 >= r.sentences.length) {
           const added = more(r.sentences[r.sentences.length - 1])
           r.sentences.push(...added)
-          r.typists.push(...added.map((s) => new Typist(s.reading)))
+          r.typists.push(...added.map((s) => new Typist(s.reading, prefer)))
         }
       }
       if (r.index === r.typists.length) {
@@ -163,7 +175,7 @@ export default function Game({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [mode, title, missLimit, more, count, onFinish, onAbort])
+  }, [mode, title, missLimit, more, prefer, count, keySound, missSound, volume, onFinish, onAbort])
 
   useEffect(() => {
     const id = setInterval(() => {

@@ -102,3 +102,87 @@ describe('Typist', () => {
     expect(() => new Typist('漢字')).toThrow()
   })
 })
+
+function typed(reading: string, keys: string, prefer?: Map<string, string>): Typist {
+  const t = new Typist(reading, prefer)
+  for (const k of keys) expect(t.input(k), keys).toBe(true)
+  return t
+}
+
+describe('segments', () => {
+  const pairs = (t: Typist) => t.segments.map((s) => [s.kana, s.romaji])
+
+  it('splits what was typed into kana and the spelling used for each', () => {
+    expect(pairs(typed('しゃしん', 'shasin'))).toEqual([
+      ['しゃ', 'sha'],
+      ['し', 'si'],
+    ])
+    expect(pairs(typed('しゃしん', 'shasinn'))).toEqual([
+      ['しゃ', 'sha'],
+      ['し', 'si'],
+      ['ん', 'nn'],
+    ])
+    expect(pairs(typed('じゃ', 'jilya'))).toEqual([
+      ['じ', 'ji'],
+      ['ゃ', 'lya'],
+    ])
+  })
+
+  it('tells a lone n from nn by what followed', () => {
+    expect(pairs(typed('かんたん', 'kantann'))).toEqual([
+      ['か', 'ka'],
+      ['ん', 'n'],
+      ['た', 'ta'],
+      ['ん', 'nn'],
+    ])
+    expect(pairs(typed('かんたん', 'kanntann'))[1]).toEqual(['ん', 'nn'])
+  })
+
+  it('keeps a doubled consonant with the kana it doubles', () => {
+    expect(pairs(typed('かった', 'katta'))).toEqual([
+      ['か', 'ka'],
+      ['った', 'tta'],
+    ])
+    expect(pairs(typed('かった', 'kaltuta'))[1]).toEqual(['っ', 'ltu'])
+  })
+
+  it('lists the spellings that were possible at that place', () => {
+    expect(typed('し', 'shi').segments[0].options).toEqual(['si', 'shi', 'ci'])
+    const [, n1, , n2] = typed('かんたん', 'kantann').segments
+    expect(n1.options).toContain('n')
+    expect(n2.options).not.toContain('n')
+  })
+})
+
+describe('preferred spellings', () => {
+  const prefer = new Map([
+    ['し', 'shi'],
+    ['じゃ', 'ja'],
+    ['ち', 'chi'],
+    ['ん', 'nn'],
+  ])
+
+  it('show in the guide, including after a doubled consonant', () => {
+    expect(new Typist('しじゃ', prefer).guide).toBe('shija')
+    expect(new Typist('まっち', prefer).guide).toBe('macchi')
+    expect(new Typist('しゃ', prefer).guide).toBe('sya')
+  })
+
+  it('still accept every other spelling', () => {
+    expect(typed('しじゃ', 'sizya', prefer).done).toBe(true)
+    expect(typed('かんたん', 'kantann', prefer).done).toBe(true)
+  })
+
+  it('keep nn in the guide until the second n is typed', () => {
+    expect(new Typist('かんたん', prefer).guide).toBe('kanntann')
+    const t = typed('かんたん', 'kan', prefer)
+    expect(t.guide).toBe('ntann')
+    expect(t.kanaPos).toBe(1)
+    // n 1打のまま次へ進んでもよい
+    expect(typed('かんたん', 'kant', prefer).guide).toBe('ann')
+  })
+
+  it('ignore a spelling the kana does not have', () => {
+    expect(new Typist('し', new Map([['し', 'xx']])).guide).toBe('si')
+  })
+})

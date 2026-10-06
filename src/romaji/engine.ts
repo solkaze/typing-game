@@ -8,7 +8,13 @@ type Option = {
   loneN?: boolean
 }
 
-type State = { pos: number; buf: string; afterN: boolean }
+// path は、ここまでに打ち終えたかなと、その打ち方
+type State = { pos: number; buf: string; afterN: boolean; path: { pos: number; option: Option }[] }
+
+// 打ち終えたかな1つぶん。options はその位置で通る打ち方すべて (ガイドの優先順)
+export type Segment = { kana: string; romaji: string; options: string[] }
+
+const FULL_N = ['nn', 'xn', "n'"]
 
 const N_BLOCKED = 'aiueoyn'
 const DOUBLABLE = /^[bcdfghjklmpqrstvwxyz]/
@@ -24,12 +30,25 @@ export function normalizeKana(text: string): string {
 export class Typist {
   readonly kana: string
   typed = ''
-  private states: State[] = [{ pos: 0, buf: '', afterN: false }]
+  private states: State[] = [{ pos: 0, buf: '', afterN: false, path: [] }]
   private cache = new Map<number, Option[]>()
+  // かな -> ガイドで優先する打ち方。表に無い打ち方は無視する
+  private prefer: ReadonlyMap<string, string>
+  // 「ん」を nn などの2打で打つ人か
+  private fullN: boolean
 
-  constructor(reading: string) {
+  constructor(reading: string, prefer: ReadonlyMap<string, string> = new Map()) {
     this.kana = normalizeKana(reading)
+    this.prefer = prefer
+    this.fullN = FULL_N.includes(prefer.get('ん') ?? '')
     for (let i = 0; i < this.kana.length; i++) this.options(i)
+  }
+
+  private ordered(kana: string, spellings: readonly string[]): readonly string[] {
+    const first = this.prefer.get(kana)
+    return first !== undefined && spellings.includes(first)
+      ? [first, ...spellings.filter((r) => r !== first)]
+      : spellings
   }
 
   private options(pos: number): Option[] {
@@ -44,9 +63,9 @@ export class Typist {
       const next = hasNext ? this.options(pos + 1) : []
       const usable = next.filter((o) => !N_BLOCKED.includes(o.romaji[0]))
       const lone: Option = { len: 1, romaji: 'n', loneN: true }
-      const full = ['nn', 'xn', "n'"].map((romaji) => ({ len: 1, romaji }))
+      const full = this.ordered('ん', FULL_N).map((romaji) => ({ len: 1, romaji }))
       // 次の字の既定の打ち方が n 1打と両立しないなら、ガイドは nn を優先する
-      if (usable.length > 0 && usable[0] === next[0]) opts.push(lone, ...full)
+      if (usable.length > 0 && usable[0] === next[0] && !this.fullN) opts.push(lone, ...full)
       else if (usable.length > 0) opts.push(...full, lone)
       else opts.push(...full)
     } else {
@@ -58,7 +77,8 @@ export class Typist {
       }
       for (let len = MAX_CHUNK; len >= 1; len--) {
         if (pos + len > kana.length) continue
-        for (const romaji of KANA_TABLE.get(kana.slice(pos, pos + len)) ?? []) {
+        const chunk = kana.slice(pos, pos + len)
+        for (const romaji of this.ordered(chunk, KANA_TABLE.get(chunk) ?? [])) {
           opts.push({ len, romaji })
         }
       }
@@ -81,11 +101,13 @@ export class Typist {
       const buf = s.buf + key
       for (const o of this.options(s.pos)) {
         if (!o.romaji.startsWith(buf)) continue
-        const state =
+        const state: State =
           o.romaji.length === buf.length
-            ? { pos: s.pos + o.len, buf: '', afterN: !!o.loneN }
-            : { pos: s.pos, buf, afterN: false }
-        next.set(`${state.pos}|${state.buf}|${state.afterN}`, state)
+            ? { pos: s.pos + o.len, buf: '', afterN: !!o.loneN, path: [...s.path, { pos: s.pos, option: o }] }
+            : { pos: s.pos, buf, afterN: false, path: s.path }
+        // 同じ状態に別の道筋で着くことは無いが、あっても先に見つけたほうを残す
+        const id = `${state.pos}|${state.buf}|${state.afterN}`
+        if (!next.has(id)) next.set(id, state)
       }
     }
     if (next.size === 0) return false
@@ -119,10 +141,12 @@ export class Typist {
   }
 
   private best(): { state: State; rest: string } {
-    let best: { state: State; rest: string } | undefined
+    let best: { state: State; rest: string; cost: number } | undefined
     for (const state of this.states) {
       const rest = this.complete(state)
-      if (!best || rest.length < best.rest.length) best = { state, rest }
+      // nn で打つ人には、n 1打で済ませた解釈を1打ぶん不利にして、2打目の n をガイドに残す
+      const cost = rest.length + (this.fullN && state.afterN ? 1 : 0)
+      if (!best || cost < best.cost) best = { state, rest, cost }
     }
     return best!
   }
@@ -135,6 +159,17 @@ export class Typist {
   // 打ち終えたかなの文字数
   get kanaPos(): number {
     return this.done ? this.kana.length : this.best().state.pos
+  }
+
+  // 打ち終えたかなを、打った順に。打ちかけのかなは含まない
+  get segments(): Segment[] {
+    return this.best().state.path.map(({ pos, option }) => ({
+      kana: this.kana.slice(pos, pos + option.len),
+      romaji: option.romaji,
+      options: this.options(pos)
+        .filter((o) => o.len === option.len)
+        .map((o) => o.romaji),
+    }))
   }
 }
 

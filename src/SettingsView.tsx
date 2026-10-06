@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { COUNTDOWN_OPTIONS, SENTENCE_KPS_OPTIONS, type Settings } from './settings'
+import { KEY_SOUND_OPTIONS, MISS_SOUND_OPTIONS, VOLUME_OPTIONS, playKey, playMiss } from './sound'
 
 type Props = {
   settings: Settings
@@ -73,6 +74,84 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
             onChange={(e) => onChange({ ...settings, hideGuide: e.target.checked })}
           />
         </label>
+
+        <label className="setting">
+          <div>
+            <span className="setting-label">ガイドを自分の打ち方に合わせる</span>
+            <p className="note">
+              直近の記録でよく使っている打ち方 (shi / ji / nn など) をガイドに出します。どの打ち方でも入力は受け付けます
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.ownSpelling}
+            onChange={(e) => onChange({ ...settings, ownSpelling: e.target.checked })}
+          />
+        </label>
+      </section>
+
+      <section className="panel settings">
+        <div className="setting">
+          <div>
+            <span className="setting-label">打鍵音</span>
+            <p className="note">正しく打てたときに鳴らします。選ぶと試聴できます</p>
+          </div>
+          <div className="segmented">
+            {KEY_SOUND_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={o.value === settings.keySound ? 'on' : ''}
+                onClick={() => {
+                  onChange({ ...settings, keySound: o.value })
+                  playKey(o.value, settings.volume)
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setting">
+          <div>
+            <span className="setting-label">ミス音</span>
+            <p className="note">打ち間違えたときに鳴らします</p>
+          </div>
+          <div className="segmented">
+            {MISS_SOUND_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={o.value === settings.missSound ? 'on' : ''}
+                onClick={() => {
+                  onChange({ ...settings, missSound: o.value })
+                  playMiss(o.value, settings.volume)
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setting">
+          <span className="setting-label">音量</span>
+          <div className="segmented">
+            {VOLUME_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={o.value === settings.volume ? 'on' : ''}
+                onClick={() => {
+                  onChange({ ...settings, volume: o.value })
+                  // 打鍵音が「なし」ならミス音で確かめられるようにする
+                  if (settings.keySound !== 'off') playKey(settings.keySound, o.value)
+                  else playMiss(settings.missSound, o.value)
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
     </main>
   )
