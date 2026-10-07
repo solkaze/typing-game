@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { GHOST_KPS_MAX, GHOST_KPS_MIN, GHOST_KPS_STEP } from './ghost'
 import { COUNTDOWN_OPTIONS, SENTENCE_KPS_OPTIONS, type Settings } from './settings'
 import { KEY_SOUND_OPTIONS, MISS_SOUND_OPTIONS, VOLUME_OPTIONS, playKey, playMiss } from './sound'
 
@@ -88,6 +89,43 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
             onChange={(e) => onChange({ ...settings, ownSpelling: e.target.checked })}
           />
         </label>
+      </section>
+
+      <section className="panel settings">
+        <div className="setting">
+          <div>
+            <span className="setting-label">ゴースト</span>
+            <p className="note">
+              決めた速度で打つ相手を、自分のローマ字のすぐ下に流します。文ごとに、最初の1打と同時に打ち始めます。文を打ち終えたときに前にいれば、その文の速度が目標を上回っています
+            </p>
+          </div>
+          <div className="ghost-setting">
+            <label>
+              {/* 打っている途中の値 (空や範囲の外) は保存せず、フォーカスが外れたら保存済みの値に戻す */}
+              <input
+                type="number"
+                min={GHOST_KPS_MIN}
+                max={GHOST_KPS_MAX}
+                step={GHOST_KPS_STEP}
+                defaultValue={settings.ghostKps}
+                onChange={(e) => {
+                  const n = e.target.valueAsNumber
+                  if (n >= GHOST_KPS_MIN && n <= GHOST_KPS_MAX) onChange({ ...settings, ghostKps: n })
+                }}
+                onBlur={(e) => {
+                  e.target.value = String(settings.ghostKps)
+                }}
+              />
+              打/秒
+            </label>
+            <input
+              type="checkbox"
+              aria-label="ゴーストを出す"
+              checked={settings.ghost}
+              onChange={(e) => onChange({ ...settings, ghost: e.target.checked })}
+            />
+          </div>
+        </div>
       </section>
 
       <section className="panel settings">

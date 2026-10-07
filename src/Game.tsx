@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
+import Ghost from './Ghost'
 import { Typist } from './romaji/engine'
 import type { SentenceKps } from './settings'
 import { playKey, playMiss, prepare, type KeySound, type MissSound } from './sound'
@@ -19,6 +20,8 @@ type Props = {
   sentenceKps: SentenceKps
   // まだ打っていないローマ字を隠す
   hideGuide: boolean
+  // ゴーストの速度 (打/秒)。無ければゴーストを出さない
+  ghostKps?: number
   // かな -> ガイドで優先する打ち方
   prefer?: ReadonlyMap<string, string>
   keySound: KeySound
@@ -73,6 +76,7 @@ export default function Game({
   countdownSec,
   sentenceKps,
   hideGuide,
+  ghostKps,
   prefer,
   keySound,
   missSound,
@@ -262,6 +266,17 @@ export default function Game({
           {/* 隠すときも場所は取っておき、打った文字の位置がずれないようにする */}
           {hideGuide ? <span className="hidden">{typist.guide}</span> : typist.guide}
         </p>
+        {ghostKps !== undefined && (
+          <Ghost
+            // 上のローマ字の行の key (ミスの回数) と同じ数になると取り違えられるので、数だけにしない
+            key={`ghost-${index}`}
+            kps={ghostKps}
+            origin={r.origin !== null && r.sentenceOrigin !== null ? r.origin + r.sentenceOrigin : null}
+            line={typist.typed + typist.guide}
+            correct={r.sentenceCorrect}
+            blind={hideGuide}
+          />
+        )}
       </section>
 
       {/* 文が替わるたびに作り直して、出て消える動きをやり直す。出し入れで下が動かないよう場所は常に取る */}

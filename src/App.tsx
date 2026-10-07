@@ -164,6 +164,7 @@ function App() {
         countdownSec={settings.countdownSec}
         sentenceKps={settings.sentenceKps}
         hideGuide={settings.hideGuide}
+        ghostKps={settings.ghost ? settings.ghostKps : undefined}
         prefer={settings.ownSpelling ? habits : undefined}
         keySound={settings.keySound}
         missSound={settings.missSound}

@@ -1,3 +1,4 @@
+import { readGhostKps } from './ghost'
 import {
   KEY_SOUND_OPTIONS,
   MISS_SOUND_OPTIONS,
@@ -27,6 +28,10 @@ export type Settings = {
   hideGuide: boolean
   // ガイドのローマ字を、記録から分かるふだんの打ち方 (shi / ji / nn など) に合わせる
   ownSpelling: boolean
+  // 決めた速度で打ち続けるゴーストを、自分の打鍵の下に出す
+  ghost: boolean
+  // ゴーストの速度 (打/秒)
+  ghostKps: number
   // 正しく打てたときの打鍵音と、ミスしたときの音
   keySound: KeySound
   missSound: MissSound
@@ -41,6 +46,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sentenceKps: 'banner',
   hideGuide: false,
   ownSpelling: false,
+  ghost: false,
+  ghostKps: 8,
   keySound: 'off',
   missSound: 'off',
   volume: 0.5,
@@ -57,6 +64,8 @@ export function loadSettings(): Settings {
       sentenceKps: readSentenceKps(saved.sentenceKps),
       hideGuide: typeof saved.hideGuide === 'boolean' ? saved.hideGuide : DEFAULT_SETTINGS.hideGuide,
       ownSpelling: typeof saved.ownSpelling === 'boolean' ? saved.ownSpelling : DEFAULT_SETTINGS.ownSpelling,
+      ghost: typeof saved.ghost === 'boolean' ? saved.ghost : DEFAULT_SETTINGS.ghost,
+      ghostKps: readGhostKps(saved.ghostKps, DEFAULT_SETTINGS.ghostKps),
       keySound: KEY_SOUND_OPTIONS.find((o) => o.value === saved.keySound)?.value ?? DEFAULT_SETTINGS.keySound,
       missSound:
         MISS_SOUND_OPTIONS.find((o) => o.value === saved.missSound)?.value ?? DEFAULT_SETTINGS.missSound,

@@ -7,6 +7,7 @@
   --border: #e3e2dc;
   --accent: #2a78d6;
   --error: #c0392b;
+  --ghost: #7a55c7;
   --miss-bg: rgba(192, 57, 43, 0.14);
   --slow-bg: rgba(224, 150, 0, 0.22);
   --stall-bg: rgba(224, 150, 0, 0.6);
@@ -33,6 +34,7 @@
     --border: #383835;
     --accent: #3987e5;
     --error: #e66767;
+    --ghost: #a98bea;
     --miss-bg: rgba(230, 103, 103, 0.2);
     --slow-bg: rgba(224, 150, 0, 0.25);
     --stall-bg: rgba(224, 150, 0, 0.65);
@@ -364,6 +366,29 @@ td.keys {
 
 .setting .segmented button {
   background: var(--bg);
+}
+
+.ghost-setting,
+.ghost-setting label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+
+.ghost-setting {
+  gap: 1rem;
+}
+
+.ghost-setting input[type='number'] {
+  width: 5rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
 }
 
 /* 1回分のふり返り */
@@ -721,6 +746,43 @@ td.spot-text {
     color: var(--error);
     transform: translateX(3px);
   }
+}
+
+/* ゴースト。上のローマ字の行と同じ字組みにして、同じ位置に重ならないよう1行下へ流す */
+.sentence-romaji.ghost {
+  color: var(--ghost);
+}
+
+.ghost-done {
+  opacity: 0.7;
+  /* 先頭の印。幅を取らない影にして、上の行と字の位置がずれないようにする */
+  box-shadow: 2px 0 0 var(--ghost);
+}
+
+/* ガイドを隠しているときに答えが見えないよう、字の代わりに帯で出す */
+.sentence-romaji.ghost.blind .ghost-done {
+  color: transparent;
+  background: linear-gradient(transparent 42%, var(--ghost) 42% 58%, transparent 58%);
+  user-select: none;
+}
+
+.sentence p.ghost-note {
+  margin-top: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ghost-note span {
+  margin-left: 0.75em;
+}
+
+.ghost-note .ahead {
+  color: var(--ghost);
+}
+
+.ghost-note .behind {
+  color: var(--error);
 }
 
 /* 長文モード。文章全体を枠に流し、いまの文を中ほどに保つ (送りは Game.tsx) */
