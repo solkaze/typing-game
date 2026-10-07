@@ -1,20 +1,23 @@
-// 打鍵音とミス音。音声ファイルは持たず、Web Audio でその場で合成する
-export type KeySound = 'off' | 'click' | 'mech' | 'soft' | 'pop'
-export type MissSound = 'off' | 'buzz' | 'beep' | 'thud'
+// 打鍵音とミス音。どちらも公開されている音声ファイル（assets/sounds、出典とライセンスは同じ場所の LICENSE-*）を鳴らす。
+// 打鍵音は実機キーボードの録音（kbsim）、ミス音は効果音集（Kenney Interface Sounds）
+export type KeySound = 'off' | 'mxbrown' | 'cream' | 'topre' | 'mxblue'
+export type MissSound = 'off' | 'error' | 'bong' | 'drop'
+
+type Kind = Exclude<KeySound | MissSound, 'off'>
 
 export const KEY_SOUND_OPTIONS: { value: KeySound; label: string }[] = [
   { value: 'off', label: 'なし' },
-  { value: 'click', label: 'クリック' },
-  { value: 'mech', label: 'メカニカル' },
-  { value: 'soft', label: '静音' },
-  { value: 'pop', label: 'ポップ' },
+  { value: 'mxbrown', label: '茶軸' },
+  { value: 'cream', label: 'クリーム' },
+  { value: 'topre', label: '静電容量' },
+  { value: 'mxblue', label: '青軸' },
 ]
 
 export const MISS_SOUND_OPTIONS: { value: MissSound; label: string }[] = [
   { value: 'off', label: 'なし' },
-  { value: 'buzz', label: 'ブザー' },
-  { value: 'beep', label: 'ビープ' },
-  { value: 'thud', label: '低音' },
+  { value: 'error', label: 'エラー' },
+  { value: 'bong', label: '低音' },
+  { value: 'drop', label: 'ドロップ' },
 ]
 
 export const VOLUME_OPTIONS: { value: number; label: string }[] = [
@@ -23,86 +26,98 @@ export const VOLUME_OPTIONS: { value: number; label: string }[] = [
   { value: 1, label: '大' },
 ]
 
+// 音声ごとに音量が大きく違うので、同じくらいに聞こえるよう揃える倍率。
+// ミス音は打鍵音に埋もれないよう少しだけ大きくしてある
+const GAIN: Record<Kind, number> = {
+  mxbrown: 1.3,
+  cream: 3,
+  topre: 10,
+  mxblue: 0.8,
+  error: 0.5,
+  bong: 0.5,
+  drop: 0.5,
+}
+
+// パスは ./assets/sounds/<種類>/<番号>.mp3。打鍵音は 1 種類につき段ごとに録った 5 つ、ミス音は 1 つ
+const FILES = import.meta.glob<string>('./assets/sounds/*/*.mp3', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
 let ctx: AudioContext | null = null
-let noise: AudioBuffer | null = null
+const samples = new Map<Kind, AudioBuffer[]>()
+const loading = new Map<Kind, Promise<AudioBuffer[]>>()
 
 // 最初に鳴らすときに作る。ブラウザは操作があるまで音を止めているので、毎回 resume を試す
 function audio(): AudioContext | null {
   if (ctx === null) {
     if (typeof AudioContext === 'undefined') return null
     ctx = new AudioContext({ latencyHint: 'interactive' })
-    noise = ctx.createBuffer(1, ctx.sampleRate / 2, ctx.sampleRate)
-    const data = noise.getChannelData(0)
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
   }
   if (ctx.state === 'suspended') void ctx.resume()
   return ctx
 }
 
-// すぐ立ち上がって dur 秒で消える音量の山を作り、出力につなぐ
-function envelope(ac: AudioContext, gain: number, dur: number): GainNode {
-  const t = ac.currentTime
-  const node = ac.createGain()
-  node.gain.setValueAtTime(0, t)
-  node.gain.linearRampToValueAtTime(gain, t + 0.002)
-  node.gain.exponentialRampToValueAtTime(0.001, t + dur)
-  node.connect(ac.destination)
-  return node
+// 音声を読み込んでデコードする。2 回目以降は同じ結果を返す
+function load(ac: AudioContext, kind: Kind): Promise<AudioBuffer[]> {
+  let p = loading.get(kind)
+  if (!p) {
+    const urls = Object.keys(FILES)
+      .filter((path) => path.split('/').at(-2) === kind)
+      .sort()
+      .map((path) => FILES[path])
+    p = Promise.all(
+      urls.map(async (url) => ac.decodeAudioData(await (await fetch(url)).arrayBuffer())),
+    ).then((buffers) => {
+      samples.set(kind, buffers)
+      return buffers
+    })
+    // 失敗したら次に鳴らすときにもう一度試す
+    p.catch(() => loading.delete(kind))
+    loading.set(kind, p)
+  }
+  return p
 }
 
-// フィルターを通した雑音。キーが当たる「カチッ」の成分
-function burst(ac: AudioContext, type: BiquadFilterType, freq: number, dur: number, gain: number) {
-  const t = ac.currentTime
+// vary は高さを揺らす幅。連打する打鍵音が機械的に聞こえないようにする
+function sample(ac: AudioContext, kind: Kind, buffers: AudioBuffer[], volume: number, vary: number) {
+  if (buffers.length === 0) return
   const src = ac.createBufferSource()
-  src.buffer = noise
-  const filter = ac.createBiquadFilter()
-  filter.type = type
-  filter.frequency.value = freq
-  src.connect(filter).connect(envelope(ac, gain, dur))
-  // 毎回同じ波形にならないよう、雑音の途中から鳴らす
-  src.start(t, Math.random() * 0.4, dur + 0.01)
+  src.buffer = buffers[Math.floor(Math.random() * buffers.length)]
+  src.playbackRate.value = 1 + (Math.random() - 0.5) * vary
+  const gain = ac.createGain()
+  gain.gain.value = GAIN[kind] * volume
+  src.connect(gain).connect(ac.destination)
+  src.start()
 }
 
-// from から to へ高さが動く音
-function tone(ac: AudioContext, type: OscillatorType, from: number, to: number, dur: number, gain: number) {
-  const t = ac.currentTime
-  const osc = ac.createOscillator()
-  osc.type = type
-  osc.frequency.setValueAtTime(from, t)
-  osc.frequency.exponentialRampToValueAtTime(to, t + dur)
-  osc.connect(envelope(ac, gain, dur))
-  osc.start(t)
-  osc.stop(t + dur + 0.01)
+function play(kind: KeySound | MissSound, volume: number, vary: number) {
+  if (kind === 'off') return
+  const ac = audio()
+  if (!ac) return
+  const ready = samples.get(kind)
+  if (ready) sample(ac, kind, ready, volume, vary)
+  else
+    load(ac, kind).then(
+      (buffers) => sample(ac, kind, buffers, volume, vary),
+      () => {},
+    )
+}
+
+// 最初の 1 打が遅れないよう、先に読み込んでおく
+export function prepare(key: KeySound, miss: MissSound) {
+  const ac = audio()
+  if (!ac) return
+  for (const kind of [key, miss]) {
+    if (kind !== 'off') load(ac, kind).catch(() => {})
+  }
 }
 
 export function playKey(kind: KeySound, volume: number) {
-  if (kind === 'off') return
-  const ac = audio()
-  if (!ac) return
-  // 連打しても機械的に聞こえないよう、高さを少しだけ揺らす
-  const v = 0.95 + Math.random() * 0.1
-  if (kind === 'click') {
-    burst(ac, 'highpass', 3000 * v, 0.02, 0.5 * volume)
-  } else if (kind === 'mech') {
-    burst(ac, 'bandpass', 2400 * v, 0.03, 0.6 * volume)
-    tone(ac, 'sine', 190 * v, 90, 0.06, 0.5 * volume)
-  } else if (kind === 'soft') {
-    burst(ac, 'lowpass', 900 * v, 0.045, 0.45 * volume)
-  } else {
-    tone(ac, 'sine', 720 * v, 480, 0.06, 0.4 * volume)
-  }
+  play(kind, volume, 0.06)
 }
 
 export function playMiss(kind: MissSound, volume: number) {
-  if (kind === 'off') return
-  const ac = audio()
-  if (!ac) return
-  if (kind === 'buzz') {
-    tone(ac, 'sawtooth', 150, 130, 0.16, 0.3 * volume)
-  } else if (kind === 'beep') {
-    tone(ac, 'triangle', 520, 260, 0.14, 0.5 * volume)
-  } else {
-    tone(ac, 'sine', 130, 50, 0.18, 0.8 * volume)
-    burst(ac, 'lowpass', 400, 0.06, 0.5 * volume)
-  }
+  play(kind, volume, 0)
 }

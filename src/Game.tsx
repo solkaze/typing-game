@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { Typist } from './romaji/engine'
 import type { SentenceKps } from './settings'
-import { playKey, playMiss, type KeySound, type MissSound } from './sound'
+import { playKey, playMiss, prepare, type KeySound, type MissSound } from './sound'
 import type { Sentence } from './texts/sentences'
 import type { Keystroke, Mode, Session } from './types'
 
@@ -87,6 +87,9 @@ export default function Game({
   const [imeOn, setImeOn] = useState(false)
   const [missTick, setMissTick] = useState(0)
   const [count, setCount] = useState(countdownSec)
+
+  // カウントダウンの間に音を読み込んでおく
+  useEffect(() => prepare(keySound, missSound), [keySound, missSound])
 
   useEffect(() => {
     if (count <= 0) return
