@@ -49,11 +49,23 @@ let ctx: AudioContext | null = null
 const samples = new Map<Kind, AudioBuffer[]>()
 const loading = new Map<Kind, Promise<AudioBuffer[]>>()
 
+// 聞こえない大きさ (-100 dB) の一定の信号を流し続ける。
+// WebKitGTK (Tauri) は無音の間、出力 (GStreamer) に中身の無い GAP バッファを渡し、出力側は何も書き込まない。
+// そこから音を出し直すときに間に合わなかった頭の数 ms〜20 ms 余りが捨てられることがあり、
+// 頭のアタックが命の打鍵音 (とくに青軸) はかすれて聞こえる。無音にしなければ書き込みが途切れない
+function keepAwake(ac: AudioContext) {
+  const dc = ac.createConstantSource()
+  dc.offset.value = 1e-5
+  dc.connect(ac.destination)
+  dc.start()
+}
+
 // 最初に鳴らすときに作る。ブラウザは操作があるまで音を止めているので、毎回 resume を試す
 function audio(): AudioContext | null {
   if (ctx === null) {
     if (typeof AudioContext === 'undefined') return null
     ctx = new AudioContext({ latencyHint: 'interactive' })
+    keepAwake(ctx)
   }
   if (ctx.state === 'suspended') void ctx.resume()
   return ctx
@@ -107,6 +119,8 @@ function play(kind: KeySound | MissSound, volume: number, vary: number) {
 
 // 最初の 1 打が遅れないよう、先に読み込んでおく
 export function prepare(key: KeySound, miss: MissSound) {
+  // 音を使わないなら出力も開かない
+  if (key === 'off' && miss === 'off') return
   const ac = audio()
   if (!ac) return
   for (const kind of [key, miss]) {
