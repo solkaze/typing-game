@@ -58,5 +58,5 @@ Wiring facts that span files:
 ## Conventions
 
 - No semicolons, single quotes, 2-space indent (Rust is 2-space too). Code comments are written in Japanese.
-- Oxlint config (`.oxlintrc.json`) enables the `react`, `typescript`, and `oxc` plugins; `react/rules-of-hooks` is an error. Type-aware rules are off — see `README.md` for how to turn them on with `oxlint-tsgolint`.
-- `README.md` is the stock Vite template readme; treat it as tooling notes, not project docs.
+- Oxlint config (`.oxlintrc.json`) enables the `react`, `typescript`, and `oxc` plugins; `react/rules-of-hooks` is an error. Type-aware rules are off; turning them on means installing `oxlint-tsgolint` and setting `"options": { "typeAware": true }` in `.oxlintrc.json`.
+- `README.md` is the user-facing readme for the GitHub page, written in Japanese (features, modes, how to run). Keep it in step when a mode, a setting or a setup step changes.
