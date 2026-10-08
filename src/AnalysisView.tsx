@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { analyze, worst, type Row } from './analysis'
+import { analyze, changes, worst, type Change, type Row } from './analysis'
+import ChangeTable from './ChangeTable'
 import LineChart from './LineChart'
+import MissPanel from './MissPanel'
+import { misses } from './misses'
 import { spellings } from './spelling'
 import SpellingTable from './SpellingTable'
 import StatTable from './StatTable'
@@ -23,6 +26,10 @@ const date = (iso: string) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const CHANGE_LIMIT = 10
+
+const byLabel = (rows: Change[]) => new Map(rows.map((r) => [r.label, r]))
+
 const byMissRate = (rows: Row[], minCount: number, limit: number) =>
   rows
     .filter((r) => r.count >= minCount && r.missRate > 0)
@@ -35,6 +42,23 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
   const a = useMemo(() => analyze(target), [target])
   // 回数の少ない連なりは偶然の影響が大きいので、データ量に応じて足切りする
   const minCount = Math.max(3, Math.round(a.hits / 400))
+  const missed = useMemo(() => misses(target, a.medianInterval), [target, a.medianInterval])
+  // 対象を回数で前半と後半に分け、並びごとに速くなったかを見る
+  const moved = useMemo(() => {
+    const half = target.length >> 1
+    if (half === 0) return null
+    const before = analyze(target.slice(0, half))
+    const after = analyze(target.slice(half))
+    // 半分に分けるぶん、足切りも半分にする
+    const min = Math.max(3, Math.round(minCount / 2))
+    return {
+      before,
+      after,
+      keys: changes(before.keys, after.keys, min),
+      bigrams: changes(before.bigrams, after.bigrams, min),
+      trigrams: changes(before.trigrams, after.trigrams, min),
+    }
+  }, [target, minCount])
   const spelled = useMemo(
     () =>
       spellings(target)
@@ -59,6 +83,15 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
   const speeds = target.map(kps)
   const totalCorrect = target.reduce((n, s) => n + s.correct, 0)
   const totalMisses = target.reduce((n, s) => n + s.misses, 0)
+  const halfNote = moved
+    ? `前半比は、対象の前半 ${target.length >> 1} 回から後半 ${target.length - (target.length >> 1)} 回への時間の変化`
+    : ''
+  const faster = moved
+    ? moved.bigrams.filter((c) => c.gain > 0).sort((x, y) => y.gain - x.gain).slice(0, CHANGE_LIMIT)
+    : []
+  const slower = moved
+    ? moved.bigrams.filter((c) => c.gain < 0).sort((x, y) => x.gain - y.gain).slice(0, CHANGE_LIMIT)
+    : []
 
   return (
     <main className="page">
@@ -141,18 +174,46 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
 
         <StatTable
           title="遅い 2 連"
-          note={`${minCount} 回以上出たものを、損失時間の大きい順に表示`}
+          note={`${minCount} 回以上出たものを、損失時間の大きい順に表示。${halfNote}`}
           rows={worst(a.bigrams, minCount, 15)}
+          changes={moved ? byLabel(moved.bigrams) : undefined}
         />
         <StatTable
           title="遅い 3 連"
           note="時間は 2 打目と 3 打目の合計"
           rows={worst(a.trigrams, minCount, 15)}
+          changes={moved ? byLabel(moved.trigrams) : undefined}
         />
+        {moved ? (
+          <>
+            <ChangeTable
+              title="速くなった 2 連"
+              note={`縮んだ時間 × 回数の大きい順。全体の打鍵間隔は ${ms(moved.before.medianInterval)} → ${ms(moved.after.medianInterval)}`}
+              rows={faster}
+            />
+            <ChangeTable title="遅くなった 2 連" note="延びた時間 × 回数の大きい順" rows={slower} />
+          </>
+        ) : (
+          <section className="panel">
+            <h3>2 連の変化</h3>
+            <p className="note">対象の記録が 2 回以上あると、前半と後半を比べて表示します</p>
+          </section>
+        )}
         <StatTable title="ミスしやすい 2 連" rows={byMissRate(a.bigrams, minCount, 15)} />
-        <StatTable title="キー別" note="損失時間の大きい順" rows={worst(a.keys, minCount, 40)} />
+        <StatTable
+          title="キー別"
+          note="損失時間の大きい順"
+          rows={worst(a.keys, minCount, 40)}
+          changes={moved ? byLabel(moved.keys) : undefined}
+        />
 
         <SpellingTable rows={spelled} />
+
+        <MissPanel
+          stats={missed}
+          durationMs={target.reduce((n, s) => n + s.durationMs, 0)}
+          intervals={target.reduce((n, s) => n + Math.max(0, s.correct - 1), 0)}
+        />
 
         <section className="panel">
           <h3>打ち間違い</h3>

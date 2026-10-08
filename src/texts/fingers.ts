@@ -6,6 +6,8 @@ FINGERS.forEach((keys, finger) => {
   for (const key of keys) FINGER_OF.set(key, finger)
 })
 
+export const fingerOf = (key: string) => FINGER_OF.get(key)
+
 // 隣り合う2打鍵のうち、同じ指で別のキーを続けて打つものの割合。
 // これが高い文ほど、つづりや運指を変えないと打ちにくい。同じキーの連打は数えない
 export function sameFingerRate(romaji: string): number {

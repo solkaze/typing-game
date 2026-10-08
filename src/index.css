@@ -298,6 +298,24 @@ td.keys {
   color: var(--text-h);
 }
 
+td.wrap {
+  white-space: normal;
+}
+
+td.wrap .pair {
+  display: inline-block;
+  margin-left: 0.75em;
+  white-space: nowrap;
+}
+
+td.better {
+  color: var(--accent);
+}
+
+td.worse {
+  color: var(--error);
+}
+
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

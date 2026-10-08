@@ -40,7 +40,7 @@ type Hit = {
   sinceMiss: number
 }
 
-const AFTER_MISS_WINDOW = 3
+export const AFTER_MISS_WINDOW = 3
 
 export function median(values: number[]): number | null {
   if (values.length === 0) return null
@@ -175,4 +175,37 @@ export function worst(rows: Row[], minCount: number, limit: number): Row[] {
     .filter((r) => r.count >= minCount && r.median !== null)
     .sort((a, b) => b.loss - a.loss)
     .slice(0, limit)
+}
+
+export type Change = {
+  label: string
+  // 後半の回数
+  count: number
+  before: number
+  after: number
+  missBefore: number
+  missAfter: number
+  // 縮んだ時間 × 後半の回数 (ms)。正なら速くなった
+  gain: number
+}
+
+// 期間の前半と後半の行を突き合わせる。どちらかで回数が足りないものは偶然の影響が大きいので除く
+export function changes(before: Row[], after: Row[], minCount: number): Change[] {
+  const old = new Map(before.map((r) => [r.label, r]))
+  const out: Change[] = []
+  for (const r of after) {
+    const o = old.get(r.label)
+    if (!o || o.median === null || r.median === null) continue
+    if (o.count < minCount || r.count < minCount) continue
+    out.push({
+      label: r.label,
+      count: r.count,
+      before: o.median,
+      after: r.median,
+      missBefore: o.missRate,
+      missAfter: r.missRate,
+      gain: (o.median - r.median) * r.count,
+    })
+  }
+  return out
 }

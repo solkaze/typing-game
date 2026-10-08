@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analyze, median, worst } from './analysis'
+import { analyze, changes, median, worst, type Row } from './analysis'
 import { accuracy, kps, type Keystroke, type Session } from './types'
 
 // [key, t, sentence] の並びからセッションを作る。key が '!x' なら x の誤打
@@ -76,5 +76,24 @@ describe('analyze', () => {
   it('ranks rows by time lost against the overall median', () => {
     expect(worst(a.bigrams, 1, 1)[0].label).toBe('ka')
     expect(worst(a.bigrams, 10, 5)).toEqual([])
+  })
+})
+
+describe('changes', () => {
+  const row = (label: string, count: number, median: number | null, missRate = 0): Row => ({
+    label,
+    count,
+    median,
+    missRate,
+    loss: 0,
+  })
+
+  it('compares rows present in both halves with enough samples', () => {
+    const before = [row('ka', 5, 120, 0.2), row('ta', 5, 100), row('no', 2, 100), row('de', 5, null)]
+    const after = [row('ka', 4, 100, 0.1), row('ta', 6, 130), row('no', 9, 90), row('de', 5, 90), row('su', 5, 90)]
+    expect(changes(before, after, 3)).toEqual([
+      { label: 'ka', count: 4, before: 120, after: 100, missBefore: 0.2, missAfter: 0.1, gain: 80 },
+      { label: 'ta', count: 6, before: 100, after: 130, missBefore: 0, missAfter: 0, gain: -180 },
+    ])
   })
 })
