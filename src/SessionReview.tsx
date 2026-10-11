@@ -1,7 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import BarList from './BarList'
 import { normalizeKana } from './romaji/engine'
-import { SLOW_RATIO, STALL_RATIO, review, type ReviewKey, type ReviewSentence } from './review'
+import { SLOW_RATIO, STALL_RATIO, review, type Loss, type ReviewKey, type ReviewSentence } from './review'
+import SentenceChart from './SentenceChart'
+import StackBar, { type Segment } from './StackBar'
 import { readingOf } from './texts/lookup'
+import { TipRows } from './Tip'
 import { kps, type Session } from './types'
 
 type Props = { session: Session }
@@ -38,45 +42,76 @@ function tip(k: ReviewKey, baseline: number | null): string | undefined {
 
 export default function SessionReview({ session }: Props) {
   const r = useMemo(() => review(session), [session])
+  // グラフや一覧で選んだ文。ふり返りの中のその文へ移って目立たせる
+  const [selected, setSelected] = useState<number | null>(null)
   const lost = r.loss.miss.ms + r.loss.slow.ms
+  const actual = kps(session)
+  const share = (v: number) => (session.durationMs > 0 ? `${((v / session.durationMs) * 100).toFixed(1)}%` : '0.0%')
+  const base = Math.max(0, session.durationMs - lost - r.loss.lead.ms)
+
+  const select = (i: number) => {
+    setSelected(i)
+    document.getElementById(`replay-${i}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+
+  const segment = (id: string, label: string, loss: Loss, tone: Segment['tone']): Segment => ({
+    id,
+    label: `${label} (${loss.count} 箇所)`,
+    value: loss.ms,
+    text: `${sec(loss.ms)}　${share(loss.ms)}`,
+    tone,
+    tip: (
+      <TipRows
+        title={label}
+        rows={[
+          ['箇所', loss.count],
+          ['余計にかかった時間', sec(loss.ms)],
+          ['全体に占める割合', share(loss.ms)],
+        ]}
+      />
+    ),
+  })
 
   return (
     <>
       <section className="panel">
         <h3>どこで時間を失ったか</h3>
         <p className="note">
-          この回の打鍵間隔の中央値 ({ms(r.baseline)}) で打てていた場合との差
+          かかった時間 {sec(session.durationMs)} の内訳。この回の打鍵間隔の中央値 ({ms(r.baseline)}) で打てていた場合との差
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>箇所</th>
-              <th>余計にかかった時間</th>
-              <th>全体に占める割合</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { label: 'ミスして打ち直した箇所', loss: r.loss.miss },
-              { label: `ミスなしで遅かった箇所 (${SLOW_RATIO} 倍以上)`, loss: r.loss.slow },
-              { label: '文の切り替わり', loss: r.loss.lead },
-            ].map(({ label, loss }) => (
-              <tr key={label}>
-                <th>{label}</th>
-                <td>{loss.count}</td>
-                <td>{sec(loss.ms)}</td>
-                <td>{session.durationMs > 0 ? ((loss.ms / session.durationMs) * 100).toFixed(1) : '0.0'}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <StackBar
+          label="かかった時間の内訳"
+          segments={[
+            { id: 'base', label: '中央値のペースで打てた分', value: base, text: `${sec(base)}　${share(base)}`, tone: 'base' },
+            segment('miss', 'ミスして打ち直した箇所', r.loss.miss, 'miss'),
+            segment('lead', '文の切り替わり', r.loss.lead, 'lead'),
+            segment('slow', `ミスなしで遅かった箇所 (${SLOW_RATIO} 倍以上)`, r.loss.slow, 'slow'),
+          ]}
+        />
         {r.potentialKps !== null && lost > 0 && (
-          <p className="note">
-            ミスと遅れが無ければ {sec(session.durationMs - lost)}・{r.potentialKps.toFixed(2)} 打/秒 (実際は{' '}
-            {kps(session).toFixed(2)} 打/秒)
-          </p>
+          <>
+            <h4>ミスと遅れが無ければ</h4>
+            <BarList
+              max={Math.max(actual, r.potentialKps)}
+              bars={[
+                { id: 'actual', label: '実際', value: actual, text: `${actual.toFixed(2)} 打/秒` },
+                {
+                  id: 'potential',
+                  label: 'ミスと遅れなし',
+                  value: r.potentialKps,
+                  text: `${r.potentialKps.toFixed(2)} 打/秒`,
+                  extra: sec(session.durationMs - lost),
+                  tone: 'quiet',
+                },
+              ]}
+            />
+          </>
         )}
+      </section>
+
+      <section className="panel">
+        <h3>文ごとの速度</h3>
+        <SentenceChart sentences={r.sentences} average={actual} selected={selected} onSelect={select} />
       </section>
 
       <section className="panel review-replay">
@@ -96,7 +131,7 @@ export default function SessionReview({ session }: Props) {
           打ち直した箇所　キーにカーソルを置くと時間と誤打を表示
         </p>
         {r.sentences.map((s, i) => (
-          <div key={i} className="replay">
+          <div key={i} id={`replay-${i}`} className={`replay${i === selected ? ' on' : ''}`}>
             <div className="replay-head">
               <span className="replay-text">{s.text}</span>
               <span className="replay-stats">
@@ -125,33 +160,28 @@ export default function SessionReview({ session }: Props) {
 
       <section className="panel">
         <h3>遅かった箇所</h3>
-        <p className="note">ミスなしで時間がかかった打鍵を長い順に表示。太字が遅れたキー</p>
+        <p className="note">ミスなしで時間がかかった打鍵を長い順に表示。太字が遅れたキー。押すとその文のふり返りへ移ります</p>
         {r.spots.length === 0 ? (
           <p className="note">目立って遅い箇所はありません</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>キー</th>
-                <th className="spot-text">文</th>
-                <th>時間</th>
-                <th>中央値比</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.spots.map((p) => (
-                <tr key={`${p.sentence}-${p.index}`}>
-                  <td className="keys">
-                    <span className="spot-before">{p.before}</span>
-                    <strong>{shown(p.key)}</strong>
-                  </td>
-                  <td className="spot-text">{r.sentences[p.sentence].text}</td>
-                  <td>{ms(p.dt)}</td>
-                  <td>×{p.ratio.toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <BarList
+            mono
+            bars={r.spots.map((p) => ({
+              id: `${p.sentence}-${p.index}`,
+              label: (
+                <>
+                  <span className="spot-before">{p.before}</span>
+                  <strong>{shown(p.key)}</strong>
+                </>
+              ),
+              value: p.dt,
+              text: ms(p.dt),
+              extra: `×${p.ratio.toFixed(1)}`,
+              sub: r.sentences[p.sentence].text,
+              tone: p.ratio >= STALL_RATIO ? ('slow' as const) : ('slow-soft' as const),
+              onClick: () => select(p.sentence),
+            }))}
+          />
         )}
       </section>
     </>

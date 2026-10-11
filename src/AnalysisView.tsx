@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { analyze, changes, worst, type Change, type Row } from './analysis'
-import ChangeTable from './ChangeTable'
+import BarList, { type Bar } from './BarList'
+import ChangeChart from './ChangeChart'
+import KeyboardMap from './KeyboardMap'
 import LineChart from './LineChart'
 import MissPanel from './MissPanel'
 import { misses } from './misses'
 import { spellings } from './spelling'
 import SpellingTable from './SpellingTable'
-import StatTable from './StatTable'
+import StatChart from './StatChart'
 import { kps, type Session } from './types'
 
 // sessions は1つのモードの記録だけを渡す。label はそのモード名
@@ -26,7 +28,10 @@ const date = (iso: string) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const CHANGE_LIMIT = 10
+const CHANGE_LIMIT = 8
+const CONFUSION_LIMIT = 15
+
+const key = (k: string) => (k === ' ' ? 'Space' : k)
 
 const byLabel = (rows: Change[]) => new Map(rows.map((r) => [r.label, r]))
 
@@ -84,7 +89,7 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
   const totalCorrect = target.reduce((n, s) => n + s.correct, 0)
   const totalMisses = target.reduce((n, s) => n + s.misses, 0)
   const halfNote = moved
-    ? `前半比は、対象の前半 ${target.length >> 1} 回から後半 ${target.length - (target.length >> 1)} 回への時間の変化`
+    ? `▼▲ は、対象の前半 ${target.length >> 1} 回から後半 ${target.length - (target.length >> 1)} 回への時間の変化 (ms)`
     : ''
   const faster = moved
     ? moved.bigrams.filter((c) => c.gain > 0).sort((x, y) => y.gain - x.gain).slice(0, CHANGE_LIMIT)
@@ -92,6 +97,20 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
   const slower = moved
     ? moved.bigrams.filter((c) => c.gain < 0).sort((x, y) => x.gain - y.gain).slice(0, CHANGE_LIMIT)
     : []
+
+  const flowTimes = (
+    [
+      ['通常', a.medianInterval, undefined],
+      ['ミス直後の 3 打', a.flow.afterMiss, 'miss'],
+      ['文の切り替わり', a.flow.sentenceStart, 'quiet'],
+    ] as const
+  ).flatMap(([name, v, tone]): Bar[] => (v === null ? [] : [{ id: name, label: name, value: v, text: ms(v), tone }]))
+  const flowSpeeds = (
+    [
+      ['前半', a.flow.firstHalfKps],
+      ['後半', a.flow.secondHalfKps],
+    ] as const
+  ).flatMap(([name, v]): Bar[] => (v === null ? [] : [{ id: name, label: name, value: v, text: rate(v) }]))
 
   return (
     <main className="page">
@@ -143,72 +162,44 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
         />
       </section>
 
-      <div className="grid-2">
-        <section className="panel">
-          <h3>流れ</h3>
-          <table>
-            <tbody>
-              <tr>
-                <th>通常の打鍵間隔</th>
-                <td>{ms(a.medianInterval)}</td>
-              </tr>
-              <tr>
-                <th>ミス直後 3 打の打鍵間隔</th>
-                <td>{ms(a.flow.afterMiss)}</td>
-              </tr>
-              <tr>
-                <th>文の切り替わりでの間</th>
-                <td>{ms(a.flow.sentenceStart)}</td>
-              </tr>
-              <tr>
-                <th>前半の速度</th>
-                <td>{rate(a.flow.firstHalfKps)}</td>
-              </tr>
-              <tr>
-                <th>後半の速度</th>
-                <td>{rate(a.flow.secondHalfKps)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+      <KeyboardMap
+        keys={a.keys}
+        minCount={minCount}
+        changes={moved ? byLabel(moved.keys) : undefined}
+        confusions={a.confusions}
+      />
 
-        <StatTable
+      <h3 className="group">並び</h3>
+      <div className="grid-2">
+        <StatChart
           title="遅い 2 連"
-          note={`${minCount} 回以上出たものを、損失時間の大きい順に表示。${halfNote}`}
+          note={`棒は損失時間 (全体の中央値より遅い分 × 回数)。${minCount} 回以上出たものを大きい順に表示。${halfNote}`}
           rows={worst(a.bigrams, minCount, 15)}
           changes={moved ? byLabel(moved.bigrams) : undefined}
         />
-        <StatTable
+        <StatChart
           title="遅い 3 連"
           note="時間は 2 打目と 3 打目の合計"
           rows={worst(a.trigrams, minCount, 15)}
           changes={moved ? byLabel(moved.trigrams) : undefined}
         />
         {moved ? (
-          <>
-            <ChangeTable
-              title="速くなった 2 連"
-              note={`縮んだ時間 × 回数の大きい順。全体の打鍵間隔は ${ms(moved.before.medianInterval)} → ${ms(moved.after.medianInterval)}`}
-              rows={faster}
-            />
-            <ChangeTable title="遅くなった 2 連" note="延びた時間 × 回数の大きい順" rows={slower} />
-          </>
+          <ChangeChart
+            faster={faster}
+            slower={slower}
+            note={`変わった時間 × 回数の大きい順。全体の打鍵間隔は ${ms(moved.before.medianInterval)} → ${ms(moved.after.medianInterval)}`}
+          />
         ) : (
           <section className="panel">
             <h3>2 連の変化</h3>
             <p className="note">対象の記録が 2 回以上あると、前半と後半を比べて表示します</p>
           </section>
         )}
-        <StatTable title="ミスしやすい 2 連" rows={byMissRate(a.bigrams, minCount, 15)} />
-        <StatTable
-          title="キー別"
-          note="損失時間の大きい順"
-          rows={worst(a.keys, minCount, 40)}
-          changes={moved ? byLabel(moved.keys) : undefined}
-        />
+        <StatChart title="ミスしやすい 2 連" note="棒はミス率" rows={byMissRate(a.bigrams, minCount, 15)} by="miss" />
+      </div>
 
-        <SpellingTable rows={spelled} />
-
+      <h3 className="group">ミスと流れ</h3>
+      <div className="grid-2">
         <MissPanel
           stats={missed}
           durationMs={target.reduce((n, s) => n + s.durationMs, 0)}
@@ -220,26 +211,35 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
           {a.confusions.length === 0 ? (
             <p className="note">ミスの記録がありません</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>打つべきキー</th>
-                  <th>打ったキー</th>
-                  <th>回数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {a.confusions.slice(0, 20).map((c) => (
-                  <tr key={c.expected + c.typed}>
-                    <td className="keys">{c.expected}</td>
-                    <td className="keys">{c.typed === ' ' ? 'Space' : c.typed}</td>
-                    <td>{c.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <p className="note">打つべきキー → 打ったキー</p>
+              <BarList
+                mono
+                bars={a.confusions.slice(0, CONFUSION_LIMIT).map((c) => ({
+                  id: c.expected + c.typed,
+                  label: `${key(c.expected)} → ${key(c.typed)}`,
+                  value: c.count,
+                  text: `${c.count} 回`,
+                  tone: 'miss' as const,
+                }))}
+              />
+            </>
           )}
         </section>
+
+        <section className="panel">
+          <h3>流れ</h3>
+          <h4>打鍵間隔</h4>
+          <BarList bars={flowTimes} />
+          {flowSpeeds.length > 0 && (
+            <>
+              <h4>1 回の中での速度</h4>
+              <BarList bars={flowSpeeds} />
+            </>
+          )}
+        </section>
+
+        <SpellingTable rows={spelled} />
       </div>
     </main>
   )

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { analyze, worst } from './analysis'
 import SessionReview from './SessionReview'
-import StatTable from './StatTable'
+import StatChart from './StatChart'
 import { accuracy, kps, modeLabel, modeOf, type Session } from './types'
 
 type Props = {
@@ -150,9 +150,11 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
         <SessionReview session={session} />
 
         <div className="grid-2">
-          <StatTable title="今回遅かった 2 連" note="2 回以上出たもの" rows={worst(a.bigrams, 2, 8)} />
-          <StatTable
+          <StatChart title="今回遅かった 2 連" note="棒は損失時間。2 回以上出たもの" rows={worst(a.bigrams, 2, 8)} />
+          <StatChart
             title="今回ミスした 2 連"
+            note="棒はミスした回数"
+            by="misses"
             rows={a.bigrams
               .filter((r) => r.missRate > 0)
               .sort((x, y) => y.missRate * y.count - x.missRate * x.count)

@@ -1,4 +1,7 @@
+import BarList from './BarList'
 import { MISS_KINDS, type MissStats } from './misses'
+import StackBar from './StackBar'
+import { TipRows } from './Tip'
 
 type Props = {
   stats: MissStats
@@ -26,88 +29,74 @@ export default function MissPanel({ stats, durationMs, intervals }: Props) {
   const perMiss = cost && cost.direct + cost.recovery
   // 文頭など測れなかったミスも、平均と同じだけ失ったものとして見積もる
   const lost = perMiss === null ? null : Math.max(0, perMiss * stats.events)
+  const actual = (intervals / durationMs) * 1000
   const clean = lost !== null && durationMs > lost ? (intervals / (durationMs - lost)) * 1000 : null
 
   return (
     <section className="panel">
       <h3>ミスの種類と損失</h3>
-      <p className="note">同じ箇所で続けてミスしたときは、最初の 1 打で分類。例は「打つべきキー→打ったキー」</p>
-      <table>
-        <thead>
-          <tr>
-            <th>種類</th>
-            <th>回数</th>
-            <th>割合</th>
-            <th>多い例</th>
-          </tr>
-        </thead>
-        <tbody>
-          {stats.kinds.map((k) => {
-            const kind = MISS_KINDS.find((m) => m.id === k.kind)!
-            return (
-              <tr key={k.kind}>
-                <td title={kind.note}>{kind.label}</td>
-                <td>{k.count}</td>
-                <td>{((k.count / stats.events) * 100).toFixed(1)}%</td>
-                <td className="keys wrap">
-                  {k.pairs.slice(0, PAIRS).map((p) => (
-                    <span key={p.expected + p.typed} className="pair">
-                      {key(p.expected)}→{key(p.typed)} ×{p.count}
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
       <p className="note">
-        {MISS_KINDS.filter((m) => m.note)
-          .map((m) => `${m.label}: ${m.note}`)
-          .join(' / ')}
+        {stats.events} 箇所{stats.extra > 0 && ` (続けて +${stats.extra} 打)`}。同じ箇所で続けてミスしたときは、最初の 1
+        打で分類。例は「打つべきキー→打ったキー」
       </p>
+      <BarList
+        bars={stats.kinds.map((k) => {
+          const kind = MISS_KINDS.find((m) => m.id === k.kind)!
+          return {
+            id: k.kind,
+            label: kind.label,
+            value: k.count,
+            text: `${Math.round((k.count / stats.events) * 100)}%`,
+            extra: `${k.count} 回`,
+            tone: 'miss' as const,
+            sub: (
+              <span className="pairs">
+                {k.pairs.slice(0, PAIRS).map((p) => (
+                  <span key={p.expected + p.typed} className="pair">
+                    {key(p.expected)}→{key(p.typed)} ×{p.count}
+                  </span>
+                ))}
+              </span>
+            ),
+            tip: (
+              <TipRows
+                title={kind.label}
+                rows={[
+                  ['回数', k.count],
+                  ['割合', `${((k.count / stats.events) * 100).toFixed(1)}%`],
+                ]}
+                foot={kind.note || undefined}
+              />
+            ),
+          }
+        })}
+      />
 
-      <table>
-        <tbody>
-          <tr>
-            <th>ミスした箇所</th>
-            <td>
-              {stats.events} 箇所{stats.extra > 0 && ` (続けて +${stats.extra} 打)`}
-            </td>
-          </tr>
-          {cost && perMiss !== null && lost !== null && (
-            <>
-              <tr>
-                <th>1 回あたりの損失</th>
-                <td>{ms(perMiss)}</td>
-              </tr>
-              <tr>
-                <th>　打ち直すまでの遅れ</th>
-                <td>{ms(cost.direct)}</td>
-              </tr>
-              <tr>
-                <th>　直後の打鍵の遅れ</th>
-                <td>{ms(cost.recovery)}</td>
-              </tr>
-              <tr>
-                <th>失った時間</th>
-                <td>
-                  {(lost / 1000).toFixed(1)} 秒 ({((lost / durationMs) * 100).toFixed(1)}%)
-                </td>
-              </tr>
-              {clean !== null && (
-                <tr>
-                  <th>ミスが無かった場合の速度</th>
-                  <td>
-                    {((intervals / durationMs) * 1000).toFixed(2)} → {clean.toFixed(2)} 打/秒
-                  </td>
-                </tr>
-              )}
-            </>
+      {cost && perMiss !== null && lost !== null && (
+        <>
+          <h4>1 回のミスで失う時間　{ms(perMiss)}</h4>
+          <StackBar
+            label="1 回のミスで失う時間の内訳"
+            segments={[
+              { id: 'direct', label: '打ち直すまでの遅れ', value: cost.direct, text: ms(cost.direct), tone: 'miss' },
+              { id: 'recovery', label: '直後の打鍵の遅れ', value: cost.recovery, text: ms(cost.recovery), tone: 'miss-soft' },
+            ]}
+          />
+          <h4>
+            失った時間　{(lost / 1000).toFixed(1)} 秒 ({((lost / durationMs) * 100).toFixed(1)}%)
+          </h4>
+          {clean !== null && (
+            <BarList
+              max={clean}
+              bars={[
+                { id: 'actual', label: '実際の速度', value: actual, text: `${actual.toFixed(2)} 打/秒` },
+                { id: 'clean', label: 'ミスが無ければ', value: clean, text: `${clean.toFixed(2)} 打/秒`, tone: 'quiet' },
+              ]}
+            />
           )}
-        </tbody>
-      </table>
-      {cost && <p className="note">損失は通常の打鍵間隔との差。直後の遅れは、次のミスか文末までの最大 3 打ぶん</p>}
+          <p className="note">損失は通常の打鍵間隔との差。直後の遅れは、次のミスか文末までの最大 3 打ぶん</p>
+        </>
+      )}
     </section>
   )
 }
