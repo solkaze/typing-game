@@ -10,13 +10,13 @@ import {
 // 画面の挙動に関する設定。記録とは別に localStorage に置く (Tauri の webview でも残る)
 const KEY = 'typing-game.settings'
 
-// 文ごとの速度の出し方。banner: 上に出したままにする / pop: 文の下に一瞬出して消す
-export type SentenceKps = 'off' | 'banner' | 'pop'
+// 文ごとの速度の単位。文の下に一瞬出して消す。kps: 打/秒 / kpm: 打/分
+export type SentenceKps = 'off' | 'kps' | 'kpm'
 
 export const SENTENCE_KPS_OPTIONS: { value: SentenceKps; label: string }[] = [
   { value: 'off', label: 'なし' },
-  { value: 'banner', label: '上に常時' },
-  { value: 'pop', label: '下に一瞬' },
+  { value: 'kps', label: '打/秒' },
+  { value: 'kpm', label: '打/分' },
 ]
 
 export type Settings = {
@@ -43,7 +43,7 @@ export const COUNTDOWN_OPTIONS = [0, 3, 5]
 
 export const DEFAULT_SETTINGS: Settings = {
   countdownSec: 3,
-  sentenceKps: 'banner',
+  sentenceKps: 'kps',
   hideGuide: false,
   ownSpelling: false,
   ghost: false,
@@ -76,9 +76,10 @@ export function loadSettings(): Settings {
   }
 }
 
-// 以前は表示する / しないの真偽値だったので、その保存データも読む
+// 以前は表示する / しないの真偽値、その後は出し方 (banner: 上に常時 / pop: 下に一瞬) だったので、その保存データも読む
 function readSentenceKps(saved: unknown): SentenceKps {
-  if (typeof saved === 'boolean') return saved ? 'banner' : 'off'
+  if (typeof saved === 'boolean') return saved ? 'kps' : 'off'
+  if (saved === 'banner' || saved === 'pop') return 'kps'
   return SENTENCE_KPS_OPTIONS.find((o) => o.value === saved)?.value ?? DEFAULT_SETTINGS.sentenceKps
 }
 

@@ -1,5 +1,5 @@
 import { median } from './analysis'
-import type { Session } from './types'
+import { startsAtFirstKey, timedKeys, type Session } from './types'
 
 // 1回分のふり返り。打鍵ログを文ごとに並べ直し、遅かった箇所とミスした箇所に印を付ける
 
@@ -12,7 +12,8 @@ export type Level = 'ok' | 'slow' | 'stall' | 'miss'
 export type ReviewKey = {
   key: string
   kanaPos: number
-  // 直前の正打鍵からの時間。文頭では前の文の最後の打鍵から。セッションの1打目は null
+  // 直前の正打鍵からの時間。文頭では前の文の最後の打鍵から、最初の文は文が出た時から。
+  // 1打鍵目を時刻 0 にしていた以前の記録の1打目は null
   dt: number | null
   // 正しく打つまでに打ってしまったキー
   wrong: string[]
@@ -22,10 +23,11 @@ export type ReviewKey = {
 export type ReviewSentence = {
   text: string
   keys: ReviewKey[]
-  // 文頭の打鍵を除いた、文の中だけの速度 (打/秒)
+  // 文の速度 (打/秒)。全体の速度と同じく、前の文を打ち終えてから (最初の文は文が出てから) の時間、
+  // つまり文を読む時間も含める
   kps: number | null
   misses: number
-  // 前の文を打ち終えてから最初のキーを打つまでの時間
+  // 前の文を打ち終えてから (最初の文は文が出てから) 最初のキーを打つまでの時間
   lead: number | null
 }
 
@@ -58,7 +60,7 @@ const SPOT_CONTEXT = 3
 export function review(session: Session, spotLimit = 10): Review {
   const sentences: ReviewSentence[] = []
   let wrong: string[] = []
-  let prevT: number | null = null
+  let prevT: number | null = startsAtFirstKey(session) ? null : 0
 
   for (const k of session.keystrokes) {
     if (!k.ok) {
@@ -92,8 +94,9 @@ export function review(session: Session, spotLimit = 10): Review {
   }
 
   sentences.forEach((s, si) => {
-    const inner = s.keys.slice(1).reduce((sum, k) => sum + k.dt!, 0)
-    if (inner > 0) s.kps = ((s.keys.length - 1) / inner) * 1000
+    const timed = s.keys.filter((k) => k.dt !== null)
+    const total = timed.reduce((sum, k) => sum + k.dt!, 0)
+    if (total > 0) s.kps = (timed.length / total) * 1000
 
     s.keys.forEach((k, i) => {
       if (k.dt === null) return
@@ -130,7 +133,7 @@ export function review(session: Session, spotLimit = 10): Review {
     baseline,
     sentences,
     loss,
-    potentialKps: baseline !== null && ideal > 0 ? ((session.correct - 1) / ideal) * 1000 : null,
+    potentialKps: baseline !== null && ideal > 0 ? (timedKeys(session) / ideal) * 1000 : null,
     spots: spots.sort((a, b) => b.dt - a.dt).slice(0, spotLimit),
   }
 }

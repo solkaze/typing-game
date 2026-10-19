@@ -8,6 +8,7 @@
   --accent: #2a78d6;
   --error: #c0392b;
   --ghost: #7a55c7;
+  --kpm: #1f8a5b;
   --miss-bg: rgba(192, 57, 43, 0.14);
   --slow-bg: rgba(224, 150, 0, 0.22);
   --stall-bg: rgba(224, 150, 0, 0.6);
@@ -35,6 +36,7 @@
     --accent: #3987e5;
     --error: #e66767;
     --ghost: #a98bea;
+    --kpm: #3fbf86;
     --miss-bg: rgba(230, 103, 103, 0.2);
     --slow-bg: rgba(224, 150, 0, 0.25);
     --stall-bg: rgba(224, 150, 0, 0.65);
@@ -1555,8 +1557,9 @@ h3.group {
   text-align: center;
 }
 
-.sentence.waiting {
-  opacity: 0.45;
+/* カウントダウン中は文を隠す。読み始めを計測の起点に揃えるため。場所は取っておき、始まっても位置が動かないようにする */
+.sentence.waiting p {
+  visibility: hidden;
 }
 
 .sentence p {
@@ -1659,8 +1662,8 @@ h3.group {
   line-height: 2.5rem;
 }
 
-.passage.waiting {
-  opacity: 0.45;
+.passage.waiting span {
+  visibility: hidden;
 }
 
 .passage .done {
@@ -1675,7 +1678,7 @@ h3.group {
   border-radius: 3px;
 }
 
-/* 打ち終えた文の速度を一瞬だけ出す場所 (設定「下に一瞬」) */
+/* 打ち終えた文の速度を一瞬だけ出す場所 (設定「文ごとの速度を表示」) */
 .sentence-pop {
   height: 2.5rem;
   margin: 0;
@@ -1692,6 +1695,10 @@ h3.group {
   line-height: 1;
   color: var(--accent);
   animation: kps-pop 1.4s ease-out forwards;
+}
+
+.sentence-pop strong.kpm {
+  color: var(--kpm);
 }
 
 .sentence-pop small {

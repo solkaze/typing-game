@@ -37,16 +37,16 @@ type Run = {
   typists: Typist[]
   index: number
   startedAt: string
-  // 1打鍵目の KeyboardEvent.timeStamp
+  // 計測の起点 (カウントダウンが終わって最初の文を出した時刻)。performance.now() と同じ時計
   origin: number | null
   keystrokes: Keystroke[]
   correct: number
   misses: number
   kanaDone: number
-  // いまの文の最初の正打鍵の時刻と、正打鍵の数
+  // いまの文の計測の起点 (前の文を打ち終えた時刻。最初の文は 0) と、正打鍵の数
   sentenceOrigin: number | null
   sentenceCorrect: number
-  // 直前に打ち終えた文の速度 (打/秒)。review.ts と同じく文頭の打鍵を除く
+  // 直前に打ち終えた文の速度 (打/秒)。review.ts・全体の速度と同じく、次の文を読む時間も含める
   lastKps: number | null
 }
 
@@ -95,10 +95,20 @@ export default function Game({
   // カウントダウンの間に音を読み込んでおく
   useEffect(() => prepare(keySound, missSound), [keySound, missSound])
 
+  // カウントダウンが終わって文を出した時から計り始める。文を読む時間も1文目から含めるため。
+  // 打鍵を受ける effect より先に置き、カウントダウン明けの最初の打鍵より前に起点が決まるようにする
   useEffect(() => {
-    if (count <= 0) return
-    const id = setTimeout(() => setCount((n) => n - 1), 1000)
-    return () => clearTimeout(id)
+    if (count > 0) {
+      const id = setTimeout(() => setCount((n) => n - 1), 1000)
+      return () => clearTimeout(id)
+    }
+    const r = run.current!
+    if (r.origin !== null) return
+    r.origin = performance.now()
+    r.startedAt = new Date().toISOString()
+    r.sentenceOrigin = 0
+    // ゴーストを走らせ始める
+    redraw()
   }, [count])
 
   useEffect(() => {
@@ -118,11 +128,7 @@ export default function Game({
       // カウントダウン中の打鍵は記録にも残さない
       if (count > 0) return
 
-      if (r.origin === null) {
-        r.origin = e.timeStamp
-        r.startedAt = new Date().toISOString()
-      }
-      const t = e.timeStamp - r.origin
+      const t = e.timeStamp - r.origin!
       const typist = r.typists[r.index]
       const expected = typist.guide[0]
       const kanaPos = typist.kanaPos
@@ -158,12 +164,11 @@ export default function Game({
         return
       }
       r.correct++
-      r.sentenceOrigin ??= t
       r.sentenceCorrect++
       if (typist.done) {
-        const inner = t - r.sentenceOrigin
-        r.lastKps = inner > 0 ? ((r.sentenceCorrect - 1) / inner) * 1000 : null
-        r.sentenceOrigin = null
+        const span = t - r.sentenceOrigin!
+        r.lastKps = span > 0 ? (r.sentenceCorrect / span) * 1000 : null
+        r.sentenceOrigin = t
         r.sentenceCorrect = 0
         r.kanaDone += typist.kana.length
         r.index++
@@ -234,8 +239,6 @@ export default function Game({
           <strong key={count} className="countdown">
             {count}
           </strong>
-        ) : sentenceKps === 'banner' && r.lastKps !== null ? (
-          `前の文 ${r.lastKps.toFixed(2)} 打/秒`
         ) : (
           ' '
         )}
@@ -280,18 +283,25 @@ export default function Game({
       </section>
 
       {/* 文が替わるたびに作り直して、出て消える動きをやり直す。出し入れで下が動かないよう場所は常に取る */}
-      {sentenceKps === 'pop' && (
+      {sentenceKps !== 'off' && (
         <p className="sentence-pop">
-          {r.lastKps !== null && (
-            <strong key={r.index}>
-              {r.lastKps.toFixed(2)}
-              <small> 打/秒</small>
-            </strong>
-          )}
+          {r.lastKps !== null &&
+            (sentenceKps === 'kpm' ? (
+              // 単位を取り違えないよう、打/分は色を変える
+              <strong key={r.index} className="kpm">
+                {Math.round(r.lastKps * 60)}
+                <small> 打/分</small>
+              </strong>
+            ) : (
+              <strong key={r.index}>
+                {r.lastKps.toFixed(2)}
+                <small> 打/秒</small>
+              </strong>
+            ))}
         </p>
       )}
 
-      {!long && <p className="sentence-next">{next ? next.text : ' '}</p>}
+      {!long && <p className="sentence-next">{next && count <= 0 ? next.text : ' '}</p>}
 
       <footer className="hint">
         {imeOn ? (

@@ -48,7 +48,7 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
           <div>
             <span className="setting-label">文ごとの速度を表示</span>
             <p className="note">
-              文を打ち終えるたびに、その文の速度 (打/秒) を表示します。「下に一瞬」は文のすぐ下に大きく出て消えます
+              文を打ち終えるたびに、その文の速度を文のすぐ下に一瞬だけ大きく表示します。打/秒 (青) と打/分 (緑) を選べます
             </p>
           </div>
           <div className="segmented">
@@ -96,7 +96,7 @@ export default function SettingsView({ settings, onChange, onBack }: Props) {
           <div>
             <span className="setting-label">ゴースト</span>
             <p className="note">
-              決めた速度で打つ相手を、自分のローマ字のすぐ下に流します。文ごとに、最初の1打と同時に打ち始めます。文を打ち終えたときに前にいれば、その文の速度が目標を上回っています
+              決めた速度で打つ相手を、自分のローマ字のすぐ下に流します。文ごとに、文が出た時 (前の文を打ち終えた時、最初の文はカウントダウン明け) に打ち始めます。文を打ち終えたときに前にいれば、その文の速度が目標を上回っています
             </p>
           </div>
           <div className="ghost-setting">

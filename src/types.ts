@@ -1,5 +1,6 @@
 export type Keystroke = {
-  // セッションの1打鍵目からの経過ミリ秒
+  // 計測の起点 (カウントダウンが終わって最初の文を出した時) からの経過ミリ秒。
+  // 以前の記録は1打鍵目を起点 (t = 0) にしていたので、1打鍵目までの時間が無い (startsAtFirstKey)
   t: number
   key: string
   // KeyboardEvent.code。配列 (JIS/US) に依らない物理キー
@@ -47,8 +48,13 @@ export const modeOf = (s: Session): Mode => s.mode ?? 'standard'
 
 export const modeLabel = (mode: Mode) => MODES.find((m) => m.id === mode)!.label
 
-export const kps = (s: Session) =>
-  s.durationMs > 0 ? (s.correct - 1) / (s.durationMs / 1000) : 0
+// 1打鍵目を時刻 0 にしていた以前の記録か。そうなら最初の打鍵には、かかった時間が無い
+export const startsAtFirstKey = (s: Session) => s.keystrokes.length > 0 && s.keystrokes[0].t === 0
+
+// durationMs の間に打った (かかった時間を測れた) 正打鍵の数
+export const timedKeys = (s: Session) => Math.max(0, s.correct - (startsAtFirstKey(s) ? 1 : 0))
+
+export const kps = (s: Session) => (s.durationMs > 0 ? timedKeys(s) / (s.durationMs / 1000) : 0)
 
 export const accuracy = (s: Session) =>
   s.correct + s.misses > 0 ? s.correct / (s.correct + s.misses) : 0

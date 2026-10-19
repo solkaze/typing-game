@@ -64,12 +64,29 @@ describe('review', () => {
     expect(r.potentialKps).toBeCloseTo((9 / (1700 - 400)) * 1000)
   })
 
-  it('reports per-sentence speed without the gap before the sentence', () => {
+  it('reports per-sentence speed including the gap before the sentence, like the whole run', () => {
     expect(r.sentences[0].lead).toBeNull()
     expect(r.sentences[0].kps).toBeCloseTo(6)
     expect(r.sentences[1].lead).toBe(500)
-    expect(r.sentences[1].kps).toBeCloseTo(10)
+    // 前の文の最後の打鍵 (1000 ms) から 3 打で 700 ms
+    expect(r.sentences[1].kps).toBeCloseTo((3 / 700) * 1000)
+    // 文ごとの打鍵数と時間を足すと、全体の速度と同じ数え方になる
+    const keys = r.sentences.reduce((n, x) => n + x.keys.filter((k) => k.dt !== null).length, 0)
+    expect(keys).toBe(s.correct - 1)
     expect(r.sentences.map((x) => x.text)).toEqual(['一', '二'])
+  })
+
+  it('counts the time before the first key when the run starts with the sentence on screen', () => {
+    const r2 = review(
+      session([
+        ['a', 600, 0],
+        ['b', 700, 0],
+        ['c', 800, 0],
+      ]),
+    )
+    expect(r2.sentences[0].lead).toBe(600)
+    expect(r2.sentences[0].kps).toBeCloseTo((3 / 800) * 1000)
+    expect(r2.loss.lead.count).toBe(1)
   })
 
   it('lists the slowest clean keystrokes with the keys leading up to them', () => {

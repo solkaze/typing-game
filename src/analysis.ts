@@ -1,4 +1,4 @@
-import { accuracy, kps, type Session } from './types'
+import { accuracy, kps, startsAtFirstKey, type Session } from './types'
 
 export type Row = {
   label: string
@@ -113,7 +113,8 @@ export function analyze(sessions: Session[]): Analysis {
         clean: !missed,
         sinceMiss,
       }
-      if (prev && !sameSentence && hit.clean) sentenceStarts.push(k.t - prev.t)
+      // 最初の文は文が出た時 (時刻 0) から。1打鍵目を時刻 0 にしていた以前の記録では測れない
+      if (!sameSentence && hit.clean && (prev || !startsAtFirstKey(session))) sentenceStarts.push(k.t - (prev?.t ?? 0))
 
       const p1 = sameSentence ? hits[hits.length - 1] : undefined
       const p2 = p1 && p1.dt !== null ? hits[hits.length - 2] : undefined
@@ -139,7 +140,9 @@ export function analyze(sessions: Session[]): Analysis {
     if (half >= 2) {
       const end = hits[hits.length - 1].t
       const mid = hits[half].t
-      if (mid > 0) firstHalf.push((half / mid) * 1000)
+      // 時刻 0 から hits[half] までに打った数。以前の記録は hits[0] が時刻 0 なので数えない
+      const firstKeys = startsAtFirstKey(session) ? half : half + 1
+      if (mid > 0) firstHalf.push((firstKeys / mid) * 1000)
       if (end > mid) secondHalf.push(((hits.length - 1 - half) / (end - mid)) * 1000)
     }
   }
