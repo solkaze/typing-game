@@ -37,16 +37,20 @@ type Run = {
   typists: Typist[]
   index: number
   startedAt: string
-  // 計測の起点 (カウントダウンが終わって最初の文を出した時刻)。performance.now() と同じ時計
+  // 打鍵の時刻の起点 (カウントダウンが終わって最初の文を出した時刻)。performance.now() と同じ時計
   origin: number | null
   keystrokes: Keystroke[]
   correct: number
   misses: number
   kanaDone: number
-  // いまの文の計測の起点 (前の文を打ち終えた時刻。最初の文は 0) と、正打鍵の数
+  // 打ち終えた文の、1打鍵目から打ち終えるまでの時間の合計。経過時間の表示に使う
+  typedMs: number
+  // いまの文の計測の起点 (その文の1打鍵目の時刻。まだ打っていなければ null) と、正打鍵の数
   sentenceOrigin: number | null
   sentenceCorrect: number
-  // 直前に打ち終えた文の速度 (打/秒)。review.ts・全体の速度と同じく、次の文を読む時間も含める
+  // sentenceCorrect のうち、起点ちょうどに打ったので時間を測れない打鍵の数 (文の1打鍵目が正打なら 1)
+  sentenceUntimed: number
+  // 直前に打ち終えた文の速度 (打/秒)。review.ts・全体の速度と同じく、その文の1打鍵目から測る
   lastKps: number | null
 }
 
@@ -61,8 +65,10 @@ function newRun(sentences: Sentence[], prefer?: ReadonlyMap<string, string>): Ru
     correct: 0,
     misses: 0,
     kanaDone: 0,
+    typedMs: 0,
     sentenceOrigin: null,
     sentenceCorrect: 0,
+    sentenceUntimed: 0,
     lastKps: null,
   }
 }
@@ -95,7 +101,8 @@ export default function Game({
   // カウントダウンの間に音を読み込んでおく
   useEffect(() => prepare(keySound, missSound), [keySound, missSound])
 
-  // カウントダウンが終わって文を出した時から計り始める。文を読む時間も1文目から含めるため。
+  // 打鍵の時刻はカウントダウンが終わって文を出した時から記録する (1文目を読む時間も残すため)。
+  // 速度とタイムは文ごとに、その文の1打鍵目から測る。
   // 打鍵を受ける effect より先に置き、カウントダウン明けの最初の打鍵より前に起点が決まるようにする
   useEffect(() => {
     if (count > 0) {
@@ -106,9 +113,6 @@ export default function Game({
     if (r.origin !== null) return
     r.origin = performance.now()
     r.startedAt = new Date().toISOString()
-    r.sentenceOrigin = 0
-    // ゴーストを走らせ始める
-    redraw()
   }, [count])
 
   useEffect(() => {
@@ -136,6 +140,11 @@ export default function Game({
       if (ok) playKey(keySound, volume)
       else playMiss(missSound, volume)
       r.keystrokes.push({ t, key: e.key, code: e.code, ok, expected, sentence: r.index, kanaPos })
+      if (r.sentenceOrigin === null) {
+        // この文はここから測り始める。正打ならこの打鍵自体は時間を測れないので速度に数えない
+        r.sentenceOrigin = t
+        r.sentenceUntimed = ok ? 1 : 0
+      }
 
       const finish = () =>
         onFinish({
@@ -167,9 +176,11 @@ export default function Game({
       r.sentenceCorrect++
       if (typist.done) {
         const span = t - r.sentenceOrigin!
-        r.lastKps = span > 0 ? (r.sentenceCorrect / span) * 1000 : null
-        r.sentenceOrigin = t
+        r.lastKps = span > 0 ? ((r.sentenceCorrect - r.sentenceUntimed) / span) * 1000 : null
+        r.typedMs += span
+        r.sentenceOrigin = null
         r.sentenceCorrect = 0
+        r.sentenceUntimed = 0
         r.kanaDone += typist.kana.length
         r.index++
         // 次の文の予告まで出せるよう、1文先まで用意しておく
@@ -191,8 +202,10 @@ export default function Game({
 
   useEffect(() => {
     const id = setInterval(() => {
-      const origin = run.current!.origin
-      if (origin !== null) setElapsed(performance.now() - origin)
+      // 速度と同じく、文ごとに1打鍵目から打ち終えるまでの時間だけを足していく (文を読む間は止まる)
+      const { origin, typedMs, sentenceOrigin } = run.current!
+      if (origin === null) return
+      setElapsed(typedMs + (sentenceOrigin === null ? 0 : performance.now() - origin - sentenceOrigin))
     }, 100)
     return () => clearInterval(id)
   }, [])
@@ -274,7 +287,13 @@ export default function Game({
             // 上のローマ字の行の key (ミスの回数) と同じ数になると取り違えられるので、数だけにしない
             key={`ghost-${index}`}
             kps={ghostKps}
-            origin={r.origin !== null && r.sentenceOrigin !== null ? r.origin + r.sentenceOrigin : null}
+            // 文の1打鍵目と同時に走り出す。その打鍵が正打なら (時間を測れない1打) ゴーストにも
+            // 1打先に打たせておき、並ぶ位置を揃える
+            origin={
+              r.origin !== null && r.sentenceOrigin !== null
+                ? r.origin + r.sentenceOrigin - (r.sentenceUntimed * 1000) / ghostKps
+                : null
+            }
             line={typist.typed + typist.guide}
             correct={r.sentenceCorrect}
             blind={hideGuide}
@@ -308,7 +327,7 @@ export default function Game({
           <strong>日本語入力 (IME) をオフにしてください</strong>
         ) : count > 0 ? (
           'まもなく始まります　Esc: やめる'
-        ) : r.origin === null ? (
+        ) : r.keystrokes.length === 0 ? (
           '最初のキーを打つと計測が始まります　Esc: やめる'
         ) : (
           'Esc: やめる'

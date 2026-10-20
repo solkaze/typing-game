@@ -3,7 +3,8 @@ import { ghostKeys } from './ghost'
 
 type Props = {
   kps: number
-  // いまの文の計測の起点 (前の文を打ち終えた時、最初の文はカウントダウン明け)。performance.now() と同じ時計。始まる前は null
+  // ゴーストが 0 打の時刻 (その文の1打鍵目の時。1打鍵目と並ぶよう、正打なら1打ぶん前)。
+  // performance.now() と同じ時計。文の1打鍵目より前は null
   origin: number | null
   // いまの文のローマ字 (打った分 + 残りのガイド)。上の行と同じ文字列にして位置を揃える
   line: string

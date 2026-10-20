@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { review } from './review'
-import type { Keystroke, Session } from './types'
+import { kps, type Keystroke, type Session } from './types'
 
 // [key, t, sentence] の並びからセッションを作る。key が '!x' なら x の誤打
 function session(events: [string, number, number][]): Session {
@@ -57,36 +57,52 @@ describe('review', () => {
     expect(r.sentences[1].misses).toBe(0)
   })
 
-  it('splits the lost time into misses, hesitations and sentence switches', () => {
+  it('splits the lost time into misses and hesitations', () => {
     expect(r.loss.slow).toEqual({ count: 2, ms: 60 + 200 })
     expect(r.loss.miss).toEqual({ count: 1, ms: 140 })
-    expect(r.loss.lead).toEqual({ count: 1, ms: 400 })
-    expect(r.potentialKps).toBeCloseTo((9 / (1700 - 400)) * 1000)
+    // 各文の1打鍵目から: 1000 ms + 200 ms で 8 打
+    expect(r.potentialKps).toBeCloseTo((8 / (1200 - 400)) * 1000)
   })
 
-  it('reports per-sentence speed including the gap before the sentence, like the whole run', () => {
+  it('measures every sentence from its own first key, like the whole run', () => {
     expect(r.sentences[0].lead).toBeNull()
     expect(r.sentences[0].kps).toBeCloseTo(6)
+    // 前の文を打ち終えてから 500 ms は参考に出すだけで、速度には入れない
     expect(r.sentences[1].lead).toBe(500)
-    // 前の文の最後の打鍵 (1000 ms) から 3 打で 700 ms
-    expect(r.sentences[1].kps).toBeCloseTo((3 / 700) * 1000)
-    // 文ごとの打鍵数と時間を足すと、全体の速度と同じ数え方になる
-    const keys = r.sentences.reduce((n, x) => n + x.keys.filter((k) => k.dt !== null).length, 0)
-    expect(keys).toBe(s.correct - 1)
+    expect(r.sentences[1].keys[0].dt).toBeNull()
+    expect(r.sentences[1].kps).toBeCloseTo((2 / 200) * 1000)
+    // 文ごとの打鍵数と時間を足すと、全体の速度になる
+    const timed = r.sentences.flatMap((x) => x.keys.filter((k) => k.dt !== null))
+    expect(timed).toHaveLength(s.correct - 2)
+    expect(kps(s)).toBeCloseTo((timed.length / timed.reduce((n, k) => n + k.dt!, 0)) * 1000)
     expect(r.sentences.map((x) => x.text)).toEqual(['一', '二'])
   })
 
-  it('counts the time before the first key when the run starts with the sentence on screen', () => {
-    const r2 = review(
-      session([
-        ['a', 600, 0],
-        ['b', 700, 0],
-        ['c', 800, 0],
-      ]),
-    )
+  it('measures speed from the first key, showing the time before it only as the lead', () => {
+    const s2 = session([
+      ['a', 600, 0],
+      ['b', 700, 0],
+      ['c', 800, 0],
+    ])
+    const r2 = review(s2)
     expect(r2.sentences[0].lead).toBe(600)
-    expect(r2.sentences[0].kps).toBeCloseTo((3 / 800) * 1000)
-    expect(r2.loss.lead.count).toBe(1)
+    expect(r2.sentences[0].kps).toBeCloseTo((2 / 200) * 1000)
+    expect(kps(s2)).toBeCloseTo(r2.sentences[0].kps!)
+  })
+
+  it('starts timing at the first key even when it is a miss', () => {
+    const s3 = session([
+      ['!x', 500, 0],
+      ['a', 650, 0],
+      ['b', 750, 0],
+      ['c', 850, 0],
+    ])
+    const r3 = review(s3)
+    expect(r3.sentences[0].lead).toBe(500)
+    expect(r3.sentences[0].keys.map((k) => k.dt)).toEqual([150, 100, 100])
+    expect(r3.sentences[0].keys[0].level).toBe('miss')
+    expect(r3.sentences[0].kps).toBeCloseTo((3 / 350) * 1000)
+    expect(kps(s3)).toBeCloseTo(r3.sentences[0].kps!)
   })
 
   it('lists the slowest clean keystrokes with the keys leading up to them', () => {

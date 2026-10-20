@@ -69,7 +69,8 @@ describe('analyze', () => {
   it('reports sentence start latency and session figures', () => {
     expect(a.flow.sentenceStart).toBe(400)
     expect(a.trend[0].kps).toBeCloseTo(kps(s))
-    expect(kps(s)).toBeCloseTo(5 / 1.05)
+    // 文ごとに1打鍵目から: 1文目 500 ms で 3 打、2文目 150 ms で 1 打。文の間の 400 ms は入れない
+    expect(kps(s)).toBeCloseTo(4 / 0.65)
     expect(accuracy(s)).toBeCloseTo(6 / 7)
   })
 

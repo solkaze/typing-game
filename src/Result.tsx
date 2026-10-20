@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { analyze, worst } from './analysis'
 import SessionReview from './SessionReview'
 import StatChart from './StatChart'
-import { accuracy, kps, modeLabel, modeOf, type Session } from './types'
+import { accuracy, kps, modeLabel, modeOf, typingMs, type Session } from './types'
 
 type Props = {
   session: Session
@@ -110,7 +110,8 @@ export default function Result({ session, sessions, saveError, onRetry, onHome, 
         )}
         <div className="tile">
           <span className="tile-label">タイム</span>
-          <span className="tile-value">{(session.durationMs / 1000).toFixed(2)} 秒</span>
+          {/* 速度と同じく1打鍵目から */}
+          <span className="tile-value">{(typingMs(session) / 1000).toFixed(2)} 秒</span>
         </div>
         <div className="tile">
           <span className="tile-label">速度</span>

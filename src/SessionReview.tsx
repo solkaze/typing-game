@@ -6,7 +6,7 @@ import SentenceChart from './SentenceChart'
 import StackBar, { type Segment } from './StackBar'
 import { readingOf } from './texts/lookup'
 import { TipRows } from './Tip'
-import { kps, type Session } from './types'
+import { kps, typingMs, type Session } from './types'
 
 type Props = { session: Session }
 
@@ -46,8 +46,10 @@ export default function SessionReview({ session }: Props) {
   const [selected, setSelected] = useState<number | null>(null)
   const lost = r.loss.miss.ms + r.loss.slow.ms
   const actual = kps(session)
-  const share = (v: number) => (session.durationMs > 0 ? `${((v / session.durationMs) * 100).toFixed(1)}%` : '0.0%')
-  const base = Math.max(0, session.durationMs - lost - r.loss.lead.ms)
+  // 速度と同じく、各文の1打鍵目から打ち終えるまでの時間の合計
+  const total = typingMs(session)
+  const share = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : '0.0%')
+  const base = Math.max(0, total - lost)
 
   const select = (i: number) => {
     setSelected(i)
@@ -77,14 +79,14 @@ export default function SessionReview({ session }: Props) {
       <section className="panel">
         <h3>どこで時間を失ったか</h3>
         <p className="note">
-          かかった時間 {sec(session.durationMs)} の内訳。この回の打鍵間隔の中央値 ({ms(r.baseline)}) で打てていた場合との差
+          各文の1打鍵目から打ち終えるまでの時間 (合計 {sec(total)}) の内訳。この回の打鍵間隔の中央値 ({ms(r.baseline)}) で打てていた場合との差
         </p>
         <StackBar
           label="かかった時間の内訳"
+          // 赤と黄は暗い配色で隣り合うと見分けにくいので、灰色の「打てた分」を間に挟む
           segments={[
-            { id: 'base', label: '中央値のペースで打てた分', value: base, text: `${sec(base)}　${share(base)}`, tone: 'base' },
             segment('miss', 'ミスして打ち直した箇所', r.loss.miss, 'miss'),
-            segment('lead', '文の切り替わり', r.loss.lead, 'lead'),
+            { id: 'base', label: '中央値のペースで打てた分', value: base, text: `${sec(base)}　${share(base)}`, tone: 'base' },
             segment('slow', `ミスなしで遅かった箇所 (${SLOW_RATIO} 倍以上)`, r.loss.slow, 'slow'),
           ]}
         />
@@ -100,7 +102,7 @@ export default function SessionReview({ session }: Props) {
                   label: 'ミスと遅れなし',
                   value: r.potentialKps,
                   text: `${r.potentialKps.toFixed(2)} 打/秒`,
-                  extra: sec(session.durationMs - lost),
+                  extra: sec(total - lost),
                   tone: 'quiet',
                 },
               ]}

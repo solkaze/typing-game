@@ -1,5 +1,5 @@
 export type Keystroke = {
-  // 計測の起点 (カウントダウンが終わって最初の文を出した時) からの経過ミリ秒。
+  // カウントダウンが終わって最初の文を出した時からの経過ミリ秒 (速度は文ごとに1打鍵目から測る: keyTimes)。
   // 以前の記録は1打鍵目を起点 (t = 0) にしていたので、1打鍵目までの時間が無い (startsAtFirstKey)
   t: number
   key: string
@@ -51,10 +51,38 @@ export const modeLabel = (mode: Mode) => MODES.find((m) => m.id === mode)!.label
 // 1打鍵目を時刻 0 にしていた以前の記録か。そうなら最初の打鍵には、かかった時間が無い
 export const startsAtFirstKey = (s: Session) => s.keystrokes.length > 0 && s.keystrokes[0].t === 0
 
-// durationMs の間に打った (かかった時間を測れた) 正打鍵の数
-export const timedKeys = (s: Session) => Math.max(0, s.correct - (startsAtFirstKey(s) ? 1 : 0))
+// 速度は多くのタイピングサイトと同じく、文ごとにその文の1打鍵目 (誤打も含む) から測る。
+// 文が出てから打ち始めるまで (文を読む時間) は入れない。
+// 正打鍵ごとの、かかった時間: 同じ文の直前の正打鍵 (文の最初の正打鍵はその文の1打鍵目) からの時間。
+// 文の1打鍵目そのものが正打なら測れないので null
+export function keyTimes(s: Session): (number | null)[] {
+  const out: (number | null)[] = []
+  let sentence = -1
+  let anchor = 0
+  for (const k of s.keystrokes) {
+    const first = k.sentence !== sentence
+    if (first) {
+      sentence = k.sentence
+      anchor = k.t
+    }
+    if (!k.ok) continue
+    out.push(first ? null : k.t - anchor)
+    anchor = k.t
+  }
+  return out
+}
 
-export const kps = (s: Session) => (s.durationMs > 0 ? timedKeys(s) / (s.durationMs / 1000) : 0)
+// 各文で1打鍵目から最後の正打鍵までにかかった時間の合計
+export const typingMs = (s: Session) => keyTimes(s).reduce<number>((sum, dt) => sum + (dt ?? 0), 0)
+
+// typingMs の間に打った (かかった時間を測れた) 正打鍵の数。各文の1打鍵目が正打ならそれは数えない
+export const timedKeys = (s: Session) => keyTimes(s).filter((dt) => dt !== null).length
+
+export const kps = (s: Session) => {
+  const times = keyTimes(s).filter((dt) => dt !== null)
+  const ms = times.reduce((sum, dt) => sum + dt, 0)
+  return ms > 0 ? times.length / (ms / 1000) : 0
+}
 
 export const accuracy = (s: Session) =>
   s.correct + s.misses > 0 ? s.correct / (s.correct + s.misses) : 0

@@ -1,4 +1,4 @@
-import { accuracy, kps, startsAtFirstKey, type Session } from './types'
+import { accuracy, keyTimes, kps, startsAtFirstKey, type Session } from './types'
 
 export type Row = {
   label: string
@@ -138,12 +138,17 @@ export function analyze(sessions: Session[]): Analysis {
     hitCount += hits.length
     const half = hits.length >> 1
     if (half >= 2) {
-      const end = hits[hits.length - 1].t
-      const mid = hits[half].t
-      // 時刻 0 から hits[half] までに打った数。以前の記録は hits[0] が時刻 0 なので数えない
-      const firstKeys = startsAtFirstKey(session) ? half : half + 1
-      if (mid > 0) firstHalf.push((firstKeys / mid) * 1000)
-      if (end > mid) secondHalf.push(((hits.length - 1 - half) / (end - mid)) * 1000)
+      // 全体の速度 (kps) と同じく、文ごとに1打鍵目から測った時間で比べる
+      const times = keyTimes(session)
+      const speed = (part: (number | null)[]) => {
+        const timed = part.filter((dt) => dt !== null)
+        const ms = timed.reduce((sum, dt) => sum + dt, 0)
+        return ms > 0 ? (timed.length / ms) * 1000 : null
+      }
+      const first = speed(times.slice(0, half + 1))
+      const second = speed(times.slice(half + 1))
+      if (first !== null) firstHalf.push(first)
+      if (second !== null) secondHalf.push(second)
     }
   }
 

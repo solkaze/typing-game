@@ -872,11 +872,6 @@ h3.group {
   background: color-mix(in srgb, var(--miss) 45%, var(--surface-1));
 }
 
-.stack-seg.lead,
-.swatch.lead {
-  background: var(--series-1);
-}
-
 .stack-seg.slow,
 .swatch.slow {
   background: var(--slow);

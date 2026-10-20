@@ -9,7 +9,7 @@ import { misses } from './misses'
 import { spellings } from './spelling'
 import SpellingTable from './SpellingTable'
 import StatChart from './StatChart'
-import { kps, timedKeys, type Session } from './types'
+import { kps, timedKeys, typingMs, type Session } from './types'
 
 // sessions は1つのモードの記録だけを渡す。label はそのモード名
 type Props = { sessions: Session[]; label: string; onBack: () => void }
@@ -202,7 +202,7 @@ export default function AnalysisView({ sessions, label, onBack }: Props) {
       <div className="grid-2">
         <MissPanel
           stats={missed}
-          durationMs={target.reduce((n, s) => n + s.durationMs, 0)}
+          durationMs={target.reduce((n, s) => n + typingMs(s), 0)}
           intervals={target.reduce((n, s) => n + timedKeys(s), 0)}
         />
 

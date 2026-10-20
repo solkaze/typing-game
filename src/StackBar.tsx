@@ -7,7 +7,7 @@ export type Segment = {
   value: number
   // 凡例に出す値
   text: ReactNode
-  tone: 'base' | 'miss' | 'miss-soft' | 'lead' | 'slow'
+  tone: 'base' | 'miss' | 'miss-soft' | 'slow'
   tip?: ReactNode
 }
 
